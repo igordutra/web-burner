@@ -1,6 +1,6 @@
 # silky-bohr-burner 💿
 
-A premium, custom self-hosted web interface built specifically for headless home Linux servers. It lets you upload, organize, and burn music CDs, as well as rip and archive physical Audio CDs directly from any device on your local network (laptops, phones, tablets) through a beautiful, luxury glassmorphic dashboard.
+A premium, custom self-hosted web interface built specifically for headless home Linux servers. It lets you upload, organise, and burn music CDs, as well as rip and archive physical Audio CDs directly from any device on your local network (laptops, phones, tablets) through a beautiful, luxury glassmorphic dashboard.
 
 ---
 
@@ -34,7 +34,7 @@ To set up everything on your home Linux server in under a minute, we have provid
 - **Interactive Connection Badges & Animators**: Glowing compact disc lens widget lights up cyan and spins when a CD is detected, and pauses when the drive is empty. Turntable mechanical needle arms swing out to represent active conversion and rip phases.
 - **Custom Tag Editor**: Change track titles directly in the ripping tracks grid before starting, automatically embedding tags into final encoded files.
 - **Seamless Mastering Sync**: Ripped files instantly flow into the Mastering queue of Tab 1, enabling mixed mastering compiles.
-- **Live Terminal Logging Dialog**: Spawns physical optical burning (`wodim`) or ripping (`cdparanoia`) engines and streams active terminal logs to separate retro CRT-styled console log modals in the browser via Server-Sent Events (SSE).
+- **Live Terminal Logging Dialogue**: Spawns physical optical burning (`wodim`) or ripping (`cdparanoia`) engines and streams active terminal logs to separate retro CRT-styled console log modals in the browser via Server-Sent Events (SSE).
 - **Intelligent Dev Mock Mode**: Features an automatic simulator fallback when physical devices or CLI tools are missing (e.g., developing/reviewing on macOS), providing realistic simulated logs, sector progress updates, CD scans, and spinning animations.
 
 ---

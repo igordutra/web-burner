@@ -64,7 +64,7 @@ const ripProgressDialog = document.getElementById('rip-progress-dialog');
 const closeRipDialogBtn = document.getElementById('close-rip-dialog-btn');
 
 /* ==========================================================================
-   Initialization
+   Initialisation
    ========================================================================== */
 document.addEventListener('DOMContentLoaded', () => {
   fetchTracks();
@@ -577,7 +577,7 @@ function openProgressModal(speed, isSimulated) {
 
   eventSource.onerror = (err) => {
     console.error('SSE connection error:', err);
-    consoleLog.textContent += '\n[System Error]: SSE bridge lost connection. Re-synchronizing...\n';
+    consoleLog.textContent += '\n[System Error]: SSE bridge lost connection. Re-synchronising...\n';
     scrollConsoleToBottom();
   };
 }
@@ -818,7 +818,7 @@ async function startCDRipProcess() {
 
   isRippingCD = true;
   ripBtn.disabled = true;
-  ripBtn.textContent = 'Initializing Rip...';
+  ripBtn.textContent = 'Initialising Rip...';
 
   try {
     const res = await fetch('/api/rip', {
@@ -994,7 +994,7 @@ function updateRipUIStatus(state, format) {
         b.className = 'rip-status-badge rip-status-complete';
       });
 
-      // Synchronize back tracks to Tab 1 Mastering playlist queue
+      // Synchronise back tracks to Tab 1 Mastering playlist queue
       fetchTracks();
     } else {
       ripDialogBadge.textContent = 'Failed';

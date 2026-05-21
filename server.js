@@ -265,7 +265,7 @@ function runMockBurn(simulateSpeed, isDummy) {
     activeBurnJob.error = null;
     activeBurnJob.logs = [];
 
-    broadcastStatus('>>> Initializing silky-bohr-burner (MOCK SESSION) <<<');
+    broadcastStatus('>>> Initialising silky-bohr-burner (MOCK SESSION) <<<');
     broadcastStatus(`Target Device: mock | Write Speed: ${simulateSpeed}x | Dummy Mode: ${isDummy}`);
     broadcastStatus('Validating disc storage capacities...');
 
@@ -367,7 +367,7 @@ async function runRealBurn(device, speed, isDummy) {
   activeBurnJob.error = null;
   activeBurnJob.logs = [];
 
-  broadcastStatus('>>> Initializing silky-bohr-burner (REAL SESSION) <<<');
+  broadcastStatus('>>> Initialising silky-bohr-burner (REAL SESSION) <<<');
   broadcastStatus(`Target Device: ${device} | Write Speed: ${speed}x | Dummy Mode: ${isDummy}`);
 
   cleanupBurnTemp();
@@ -506,7 +506,7 @@ function runMockRip(format, album, artist, ripTracks) {
     activeRipJob.error = null;
     activeRipJob.logs = [];
 
-    broadcastRipStatus('>>> Initializing silky-bohr-burner CD RIP ENGINE (MOCK SESSION) <<<');
+    broadcastRipStatus('>>> Initialising silky-bohr-burner CD RIP ENGINE (MOCK SESSION) <<<');
     broadcastRipStatus(`Album Title: ${album} | Artist Name: ${artist} | Target Format: ${format.toUpperCase()}`);
     broadcastRipStatus(`Total tracks detected for extraction: ${ripTracks.length}`);
 
@@ -643,7 +643,7 @@ async function runRealRip(device, format, album, artist, ripTracks) {
   activeRipJob.error = null;
   activeRipJob.logs = [];
 
-  broadcastRipStatus('>>> Initializing silky-bohr-burner CD RIP ENGINE (REAL SESSION) <<<');
+  broadcastRipStatus('>>> Initialising silky-bohr-burner CD RIP ENGINE (REAL SESSION) <<<');
   broadcastRipStatus(`Target Device: ${device} | Album Title: ${album} | Artist Name: ${artist} | Format: ${format.toUpperCase()}`);
 
   cleanupRipTemp();

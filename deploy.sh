@@ -4,12 +4,12 @@
 # silky-bohr-burner: Automated Deployment Engine
 # ==========================================================================
 
-# Text colors & styling
+# Text colours & styling
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+NC='\033[0m' # No Colour
 BOLD='\033[1m'
 
 echo -e "${CYAN}${BOLD}"
@@ -20,7 +20,7 @@ echo -e "${NC}"
 
 # Check if running on Linux
 if [[ "$OSTYPE" != "linux-gnu"* ]]; then
-    echo -e "${YELLOW}Warning: This script is optimized for Linux distributions.${NC}"
+    echo -e "${YELLOW}Warning: This script is optimised for Linux distributions.${NC}"
     echo -e "It seems you are running on: ${BOLD}$OSTYPE${NC}"
     echo -e "We will attempt to install Node dependencies, but system package installation will be skipped."
     echo ""
