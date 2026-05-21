@@ -1,0 +1,25 @@
+{
+  "name": "silly-bohr-burner",
+  "version": "1.0.0",
+  "description": "Premium Web Interface for burning music CDs on a home Linux server",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "cd",
+    "burner",
+    "audio",
+    "linux",
+    "itunes",
+    "web",
+    "interface"
+  ],
+  "author": "Antigravity",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1"
+  }
+}
