@@ -18,3 +18,11 @@ yarn-error.log*
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Python virtual environment
+.venv/
+
+# Runtime data persisted to disk
+playlists.json
+burn_temp/
+rip_temp/

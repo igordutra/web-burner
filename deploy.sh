@@ -184,9 +184,24 @@ fi
 
 # -- Node Dependencies Setup -------------------------------------------------
 
-echo -e "\n${CYAN}[3/4] Installing web application NPM dependencies...${NC}"
+echo -e "\n${CYAN}[3/4] Installing web application dependencies...${NC}"
+
+echo -e "Installing Node packages..."
 npm install
 echo -e "${GREEN}NPM dependencies installed successfully!${NC}"
+
+# Spotify downloader (spotdl)
+if ! command -v spotdl &>/dev/null; then
+    echo -e "Installing spotdl (Spotify downloader)..."
+    if pip3 install spotdl --break-system-packages; then
+        echo -e "${GREEN}spotdl installed successfully!${NC}"
+    else
+        echo -e "${YELLOW}Warning: spotdl installation failed. Spotify download feature will not be available.${NC}"
+        echo -e "  To install manually: ${CYAN}pip3 install spotdl --break-system-packages${NC}"
+    fi
+else
+    echo -e "${GREEN}spotdl is already installed.${NC}"
+fi
 
 # -- Optional Systemd Daemon Configuration -----------------------------------
 

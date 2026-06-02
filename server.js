@@ -1069,6 +1069,423 @@ app.get('/api/rip/progress', (req, res) => {
   });
 });
 
+/* =======================================
+   SPOTIFY SEARCH & DOWNLOAD (with SSE)
+   ======================================= */
+
+let spotifyToken = null;
+let spotifyTokenExpires = 0;
+
+async function getSpotifyToken() {
+  if (spotifyToken && Date.now() < spotifyTokenExpires) {
+    return spotifyToken;
+  }
+
+  const clientId = process.env.SPOTIFY_CLIENT_ID;
+  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error('SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET must be set in environment.');
+  }
+
+  const basic = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+  const res = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${basic}`,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: 'grant_type=client_credentials'
+  });
+
+  if (!res.ok) {
+    throw new Error(`Spotify auth failed: ${res.status} ${res.statusText}`);
+  }
+
+  const data = await res.json();
+  spotifyToken = data.access_token;
+  spotifyTokenExpires = Date.now() + (data.expires_in - 60) * 1000;
+  return spotifyToken;
+}
+
+// Download job state + SSE clients
+let activeDownloadJob = {
+  status: 'idle',
+  progress: 0,
+  currentStep: '',
+  logs: [],
+  error: null,
+  title: ''
+};
+
+let sseDownloadClients = [];
+
+function broadcastDownloadStatus(logLine) {
+  if (logLine) {
+    activeDownloadJob.logs.push(logLine);
+    if (activeDownloadJob.logs.length > 200) activeDownloadJob.logs.shift();
+  }
+
+  const data = JSON.stringify({
+    status: activeDownloadJob.status,
+    progress: activeDownloadJob.progress,
+    currentStep: activeDownloadJob.currentStep,
+    title: activeDownloadJob.title,
+    logLine,
+    error: activeDownloadJob.error
+  });
+
+  sseDownloadClients.forEach(client => {
+    client.write(`event: progress\ndata: ${data}\n\n`);
+  });
+}
+
+// Search Spotify
+app.get('/api/search', async (req, res) => {
+  const { q } = req.query;
+  if (!q || !q.trim()) {
+    return res.status(400).json({ error: 'Query parameter "q" is required.' });
+  }
+
+  try {
+    const token = await getSpotifyToken();
+    const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(q.trim())}&type=track&limit=10`;
+
+    const spotRes = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!spotRes.ok) {
+      throw new Error(`Spotify API error: ${spotRes.status}`);
+    }
+
+    const data = await spotRes.json();
+    const items = data.tracks?.items || [];
+
+    const results = items.map(t => ({
+      id: t.id,
+      title: t.name,
+      artist: t.artists.map(a => a.name).join(', '),
+      album: t.album.name,
+      albumArt: t.album.images?.[0]?.url || null,
+      duration: Math.round(t.duration_ms / 1000),
+      spotifyUrl: t.external_urls.spotify
+    }));
+
+    res.json(results);
+  } catch (err) {
+    console.error('Spotify Search Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Download a track via spotdl (async with SSE)
+app.post('/api/download', async (req, res) => {
+  const { spotifyUrl, title, artist, album, duration } = req.body;
+
+  if (!spotifyUrl) {
+    return res.status(400).json({ error: 'spotifyUrl is required.' });
+  }
+
+  // Check spotdl is available
+  let spotdlBin = 'spotdl';
+  try {
+    execSync('which spotdl', { stdio: 'ignore' });
+  } catch (e) {
+    return res.status(500).json({ error: 'spotdl is not installed. Run: pip3 install spotdl --break-system-packages' });
+  }
+
+  const trackId = spotifyUrl.split('/track/')[1]?.split('?')[0] || `dl-${Date.now()}`;
+  const safeName = `${trackId}.mp3`;
+  const outputPath = path.join(UPLOADS_DIR, safeName);
+
+  // If already downloaded, add immediately
+  if (fs.existsSync(outputPath)) {
+    const meta = await extractMetadata(outputPath, safeName);
+    const track = {
+      id: `track-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      filename: safeName,
+      path: outputPath,
+      title: title || meta.title,
+      artist: artist || meta.artist,
+      album: album || meta.album,
+      duration: duration || meta.duration,
+      size: fs.statSync(outputPath).size,
+      mimeType: 'audio/mpeg'
+    };
+    tracks.push(track);
+    return res.status(201).json({ track, cached: true });
+  }
+
+  // Init download job
+  activeDownloadJob.status = 'searching';
+  activeDownloadJob.progress = 0;
+  activeDownloadJob.currentStep = 'Searching and fetching...';
+  activeDownloadJob.title = `${artist} - ${title}`;
+  activeDownloadJob.error = null;
+  activeDownloadJob.logs = [];
+  broadcastDownloadStatus(`>>> Downloading: ${artist} - ${title}`);
+
+  res.json({ success: true, message: 'Download started.', title: activeDownloadJob.title });
+
+  try {
+    await new Promise((resolve, reject) => {
+      const proc = spawn(spotdlBin, [
+        'download', spotifyUrl,
+        '--output', path.join(UPLOADS_DIR, '{track-id}.{output-ext}'),
+        '--format', 'mp3',
+        '--bitrate', '128k',
+        '--overwrite', 'force',
+        '--print-errors'
+      ], {
+        cwd: __dirname,
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+
+      let stderrLog = '';
+
+      proc.stdout.on('data', (chunk) => {
+        const text = chunk.toString();
+        broadcastDownloadStatus(text.trim());
+      });
+
+      proc.stderr.on('data', (chunk) => {
+        const text = chunk.toString();
+        stderrLog += text;
+
+        // Parse yt-dlp progress: [download]  42.5% of ~5.20MiB at ...
+        const progressMatch = text.match(/\[download\].*?(\d+\.?\d*)%/);
+        if (progressMatch) {
+          const pct = parseFloat(progressMatch[1]);
+          activeDownloadJob.progress = Math.min(Math.round(pct), 99);
+          activeDownloadJob.status = 'downloading';
+          activeDownloadJob.currentStep = `Downloading... ${activeDownloadJob.progress}%`;
+        }
+
+        // Track individual lines
+        text.split('\n').filter(Boolean).forEach(line => {
+          if (!line.includes('[download]') || line.includes('% of')) {
+            broadcastDownloadStatus(line.trim());
+          }
+        });
+      });
+
+      proc.on('close', async (code) => {
+        if (code !== 0) {
+          reject(new Error(`spotdl exited with code ${code}\n${stderrLog.slice(0, 500)}`));
+          return;
+        }
+
+        if (!fs.existsSync(outputPath)) {
+          reject(new Error('spotdl completed but output file was not found.'));
+          return;
+        }
+
+        try {
+          activeDownloadJob.status = 'processing';
+          activeDownloadJob.currentStep = 'Processing metadata...';
+          broadcastDownloadStatus('Processing downloaded file...');
+
+          const meta = await extractMetadata(outputPath, safeName);
+          const entry = {
+            id: `track-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            filename: safeName,
+            path: outputPath,
+            title: title || meta.title,
+            artist: artist || meta.artist,
+            album: album || meta.album,
+            duration: duration || meta.duration,
+            size: fs.statSync(outputPath).size,
+            mimeType: 'audio/mpeg'
+          };
+          tracks.push(entry);
+
+          activeDownloadJob.status = 'success';
+          activeDownloadJob.progress = 100;
+          activeDownloadJob.currentStep = 'Complete!';
+          broadcastDownloadStatus('Download complete!');
+
+          resolve(entry);
+        } catch (err) {
+          reject(new Error(`Failed to process downloaded file: ${err.message}`));
+        }
+      });
+
+      proc.on('error', (err) => reject(err));
+    });
+  } catch (err) {
+    activeDownloadJob.status = 'failed';
+    activeDownloadJob.error = err.message;
+    activeDownloadJob.currentStep = 'Failed';
+    broadcastDownloadStatus(`!!! ERROR: ${err.message}`);
+    console.error('Download Error:', err);
+  }
+});
+
+// Download progress SSE
+app.get('/api/download/progress', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  sseDownloadClients.push(res);
+
+  const initialData = JSON.stringify({
+    status: activeDownloadJob.status,
+    progress: activeDownloadJob.progress,
+    currentStep: activeDownloadJob.currentStep,
+    title: activeDownloadJob.title,
+    logs: activeDownloadJob.logs,
+    error: activeDownloadJob.error
+  });
+  res.write(`event: init\ndata: ${initialData}\n\n`);
+
+  req.on('close', () => {
+    sseDownloadClients = sseDownloadClients.filter(c => c !== res);
+  });
+});
+
+/* =======================================
+   PLAYLIST MANAGEMENT
+   ======================================= */
+
+const PLAYLISTS_FILE = path.join(__dirname, 'playlists.json');
+
+let playlists = [];
+
+function loadPlaylists() {
+  try {
+    if (fs.existsSync(PLAYLISTS_FILE)) {
+      playlists = JSON.parse(fs.readFileSync(PLAYLISTS_FILE, 'utf8'));
+    }
+  } catch (err) {
+    console.error('Failed to load playlists:', err.message);
+  }
+}
+
+function savePlaylists() {
+  try {
+    fs.writeFileSync(PLAYLISTS_FILE, JSON.stringify(playlists, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Failed to save playlists:', err.message);
+  }
+}
+
+loadPlaylists();
+
+// List all playlists
+app.get('/api/playlists', (req, res) => {
+  const result = playlists.map(p => ({
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    trackCount: p.trackIds.length,
+    created: p.created,
+    updated: p.updated
+  }));
+  res.json(result);
+});
+
+// Create playlist
+app.post('/api/playlists', (req, res) => {
+  const { name, description } = req.body;
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Playlist name is required.' });
+  }
+
+  const playlist = {
+    id: `playlist-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    name: name.trim(),
+    description: (description || '').trim(),
+    trackIds: [],
+    created: new Date().toISOString(),
+    updated: new Date().toISOString()
+  };
+
+  playlists.push(playlist);
+  savePlaylists();
+  res.status(201).json(playlist);
+});
+
+// Get single playlist with full track data
+app.get('/api/playlists/:id', (req, res) => {
+  const playlist = playlists.find(p => p.id === req.params.id);
+  if (!playlist) return res.status(404).json({ error: 'Playlist not found.' });
+
+  const tracksInPlaylist = playlist.trackIds
+    .map(tid => tracks.find(t => t.id === tid))
+    .filter(Boolean);
+
+  res.json({ ...playlist, tracks: tracksInPlaylist });
+});
+
+// Update playlist (name, description)
+app.put('/api/playlists/:id', (req, res) => {
+  const playlist = playlists.find(p => p.id === req.params.id);
+  if (!playlist) return res.status(404).json({ error: 'Playlist not found.' });
+
+  if (req.body.name) playlist.name = req.body.name.trim();
+  if (req.body.description !== undefined) playlist.description = req.body.description.trim();
+  playlist.updated = new Date().toISOString();
+  savePlaylists();
+  res.json(playlist);
+});
+
+// Delete playlist
+app.delete('/api/playlists/:id', (req, res) => {
+  const idx = playlists.findIndex(p => p.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Playlist not found.' });
+
+  playlists.splice(idx, 1);
+  savePlaylists();
+  res.json({ success: true });
+});
+
+// Add track to playlist
+app.post('/api/playlists/:id/tracks', (req, res) => {
+  const playlist = playlists.find(p => p.id === req.params.id);
+  if (!playlist) return res.status(404).json({ error: 'Playlist not found.' });
+
+  const { trackId } = req.body;
+  if (!trackId) return res.status(400).json({ error: 'trackId is required.' });
+
+  const track = tracks.find(t => t.id === trackId);
+  if (!track) return res.status(404).json({ error: 'Track not found.' });
+
+  if (!playlist.trackIds.includes(trackId)) {
+    playlist.trackIds.push(trackId);
+    playlist.updated = new Date().toISOString();
+    savePlaylists();
+  }
+
+  res.json(playlist);
+});
+
+// Remove track from playlist
+app.delete('/api/playlists/:id/tracks/:trackId', (req, res) => {
+  const playlist = playlists.find(p => p.id === req.params.id);
+  if (!playlist) return res.status(404).json({ error: 'Playlist not found.' });
+
+  playlist.trackIds = playlist.trackIds.filter(tid => tid !== req.params.trackId);
+  playlist.updated = new Date().toISOString();
+  savePlaylists();
+  res.json(playlist);
+});
+
+// Reorder tracks in a playlist
+app.put('/api/playlists/:id/tracks/reorder', (req, res) => {
+  const playlist = playlists.find(p => p.id === req.params.id);
+  if (!playlist) return res.status(404).json({ error: 'Playlist not found.' });
+
+  const { trackIds } = req.body;
+  if (!Array.isArray(trackIds)) return res.status(400).json({ error: 'trackIds array required.' });
+
+  playlist.trackIds = trackIds.filter(tid => tracks.some(t => t.id === tid));
+  playlist.updated = new Date().toISOString();
+  savePlaylists();
+  res.json(playlist);
+});
+
 // Serve frontend page fallback
 app.get('*', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'index.html'));

@@ -1,12 +1,12 @@
 # silky-bohr-burner 💿
 
-A premium, custom self-hosted web interface built specifically for headless home Linux servers. It lets you upload, organise, and burn music CDs, as well as rip and archive physical Audio CDs directly from any device on your local network (laptops, phones, tablets) through a beautiful, luxury glassmorphic dashboard.
+A premium, custom self-hosted web interface built specifically for headless home Linux servers. It lets you upload, organise, search and download from Spotify, manage playlists, burn music CDs, and rip and archive physical Audio CDs directly from any device on your local network (laptops, phones, tablets) through a beautiful, luxury glassmorphic dashboard.
 
 ---
 
 ## 🚀 Automated Deployment (Recommended)
 
-To set up everything on your home Linux server in under a minute, we have provided an automated deployment script. It automatically detects your environment, installs package dependencies (`ffmpeg`, `wodim`, `cdparanoia`, `nodejs`, `npm`), configures CD burner/reader write permissions for your current user, installs local Node packages, and optionally registers the application as a **persistent Systemd background daemon** (which auto-starts on system boot and restarts if it encounters a crash!).
+To set up everything on your home Linux server in under a minute, we have provided an automated deployment script. It automatically detects your environment, installs package dependencies (`ffmpeg`, `wodim`, `cdparanoia`, `nodejs`, `npm`), installs the Spotify downloader (`spotdl`), configures CD burner/reader write permissions for your current user, installs local Node packages, and optionally registers the application as a **persistent Systemd background daemon** (which auto-starts on system boot and restarts if it encounters a crash!).
 
 ### Run the Installer
 
@@ -22,9 +22,12 @@ To set up everything on your home Linux server in under a minute, we have provid
 
 ## Key Features
 
-- **Gorgeous Luxury Dashboard**: Dark mode, retro-neon glowing accents, floating interactive panels, and modern glassmorphic styling (`backdrop-filter`) across a two-view SPA layout:
+- **Gorgeous Luxury Dashboard**: Dark mode, retro-neon glowing accents, floating interactive panels, and modern glassmorphic styling (`backdrop-filter`) across a three-view SPA layout:
   - **Tab 1: Master & Burn CD**
   - **Tab 2: Archive & Rip CD**
+  - **Tab 3: Playlists**
+- **Spotify Search & Download**: Search Spotify directly from the web UI, browse results with album art, and download tracks as high-quality MP3s with one click — complete with a live progress modal showing yt-dlp download progress.
+- **Playlist Management**: Create named playlists, add/remove tracks from the burn queue, rename and delete playlists. Persisted to disk across server restarts.
 - **Drag & Drop Upload**: Upload multiple audio files concurrently with a smooth, live-updating file progress bar.
 - **Interactive iTunes Playlist Queue**: Rearrange tracks dynamically using intuitive HTML5 drag-and-drop handles.
 - **Accurate Capacity Management**: Active length tracking with standard 74-minute and 80-minute tick markers. Warns in glowing red and disables burning if the total length exceeds the standard 80-minute Audio CD maximum.
@@ -48,12 +51,28 @@ To burn and rip physical discs, the host Linux server needs the following system
 3. **Wodim** (Debian/Ubuntu standard CD writing utility, or `cdrecord` equivalent)
 4. **Cdparanoia** (audio CD extraction utility)
 
+For Spotify search & download, you also need:
+
+5. **spotdl** (pip package) — installed automatically by `deploy.sh`:
+   ```bash
+   pip3 install spotdl --break-system-packages
+   ```
+6. **Spotify API credentials** (free) — set as environment variables:
+   ```bash
+   export SPOTIFY_CLIENT_ID="your_client_id"
+   export SPOTIFY_CLIENT_SECRET="your_client_secret"
+   ```
+   Get these at https://developer.spotify.com/dashboard (Create App, no redirect URI needed).
+
 ### Quick Server Installation (Ubuntu/Debian)
 
 ```bash
 # Update repositories and install burning/ripping backend utilities
 sudo apt update
 sudo apt install -y nodejs npm ffmpeg wodim cdparanoia
+
+# Install Spotify downloader
+pip3 install spotdl --break-system-packages
 ```
 
 ---
@@ -79,11 +98,16 @@ newgrp cdrom
    ```bash
    npm install
    ```
-3. Boot the application server:
+3. Set Spotify credentials (optional, for search/download):
+   ```bash
+   export SPOTIFY_CLIENT_ID="your_client_id"
+   export SPOTIFY_CLIENT_SECRET="your_client_secret"
+   ```
+4. Boot the application server:
    ```bash
    npm start
    ```
-4. The server will launch on port **3000** (e.g., `http://localhost:3000` or `http://your-server-ip:3000`). Access it from any web browser on your home network!
+5. The server will launch on port **3000** (e.g., `http://localhost:3000` or `http://your-server-ip:3000`). Access it from any web browser on your home network!
 
 ---
 
@@ -98,3 +122,14 @@ If you want to force Mock Mode on your server to run dry-run tests, run the serv
 ```bash
 MOCK_BURN=true npm start
 ```
+
+---
+
+## Spotify Integration
+
+The Spotify search & download feature uses two components:
+
+1. **Search**: Calls the Spotify Web API directly from Node.js (Client Credentials flow). No user OAuth needed.
+2. **Download**: Spawns `spotdl` as a subprocess, which finds the song on YouTube and downloads it as MP3. Progress is streamed to the browser via Server-Sent Events (SSE), parsing yt-dlp's download percentage.
+
+Playlists are stored in `playlists.json` in the project root.

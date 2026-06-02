@@ -41,6 +41,19 @@ const dialogProgressFill = document.getElementById('dialog-progress-fill');
 const consoleLog = document.getElementById('console-log');
 const closeDialogBtn = document.getElementById('close-dialog-btn');
 
+// DOM Elements - Spotify Search
+const searchInput = document.getElementById('search-input');
+const searchBtn = document.getElementById('search-btn');
+const searchResults = document.getElementById('search-results');
+const searchError = document.getElementById('search-error');
+const searchSpinner = document.getElementById('search-spinner');
+let isDownloading = false;
+
+// Playlist State
+let playlists = [];
+let selectedPlaylistId = null;
+let downloadEventSource = null;
+
 // DOM Elements - Navigation & Archiving
 const tabMaster = document.getElementById('tab-master');
 const tabRip = document.getElementById('tab-rip');
@@ -63,6 +76,28 @@ const ripBtn = document.getElementById('rip-btn');
 const ripProgressDialog = document.getElementById('rip-progress-dialog');
 const closeRipDialogBtn = document.getElementById('close-rip-dialog-btn');
 
+// DOM Elements - Playlists
+const tabPlaylists = document.getElementById('tab-playlists');
+const playlistsView = document.getElementById('playlists-view');
+const playlistList = document.getElementById('playlist-list');
+const newPlaylistBtn = document.getElementById('new-playlist-btn');
+const playlistDetail = document.getElementById('playlist-detail');
+const playlistDetailTitle = document.getElementById('playlist-detail-title');
+const playlistDetailName = document.getElementById('playlist-detail-name');
+const playlistTracksTbody = document.getElementById('playlist-tracks-tbody');
+const deletePlaylistBtn = document.getElementById('delete-playlist-btn');
+
+// DOM Elements - Download Progress
+const downloadProgressDialog = document.getElementById('download-progress-dialog');
+const downloadDialogTitle = document.getElementById('download-dialog-title');
+const downloadDialogBadge = document.getElementById('download-dialog-badge');
+const downloadTrackTitle = document.getElementById('download-track-title');
+const downloadCurrentStepLabel = document.getElementById('download-current-step-label');
+const downloadOverallPercentageLabel = document.getElementById('download-overall-percentage-label');
+const downloadDialogProgressFill = document.getElementById('download-dialog-progress-fill');
+const downloadConsoleLog = document.getElementById('download-console-log');
+const closeDownloadDialogBtn = document.getElementById('close-download-dialog-btn');
+
 /* ==========================================================================
    Initialisation
    ========================================================================== */
@@ -74,6 +109,9 @@ document.addEventListener('DOMContentLoaded', () => {
   setupScrollAffordances();
   setupTabControls();
   setupCDDetection();
+  setupPlaylistTab();
+  setupPlaylistDropdowns();
+  loadPlaylists();
 
   // Clear all button action
   clearAllBtn.addEventListener('click', clearAllTracks);
@@ -97,16 +135,30 @@ document.addEventListener('DOMContentLoaded', () => {
   // Close rip dialog action
   closeRipDialogBtn.addEventListener('click', () => {
     ripProgressDialog.close();
-    // Reset SSE and dialog elements
     if (ripEventSource) {
       ripEventSource.close();
       ripEventSource = null;
     }
   });
 
+  // Close download dialog action
+  closeDownloadDialogBtn.addEventListener('click', () => {
+    downloadProgressDialog.close();
+    if (downloadEventSource) {
+      downloadEventSource.close();
+      downloadEventSource = null;
+    }
+  });
+
   // Refresh CD button action
   refreshCDBtn.addEventListener('click', () => {
     scanInsertedCD(true);
+  });
+
+  // Spotify search
+  searchBtn.addEventListener('click', performSearch);
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') performSearch();
   });
 });
 
@@ -125,9 +177,23 @@ function setupTabControls() {
   tabRip.addEventListener('click', () => {
     tabRip.classList.add('active');
     tabMaster.classList.remove('active');
+    tabPlaylists.classList.remove('active');
     ripView.classList.add('active');
     masterView.classList.remove('active');
+    playlistsView.classList.remove('active');
     startCDPolling();
+    stopPlaylistPolling();
+  });
+
+  tabPlaylists.addEventListener('click', () => {
+    tabPlaylists.classList.add('active');
+    tabMaster.classList.remove('active');
+    tabRip.classList.remove('active');
+    playlistsView.classList.add('active');
+    masterView.classList.remove('active');
+    ripView.classList.remove('active');
+    stopCDPolling();
+    loadPlaylists();
   });
 }
 
@@ -445,14 +511,25 @@ function renderTracksTable() {
       <td class="track-duration-cell text-right">${durationStr}</td>
       <td class="track-size-cell text-right">${sizeStr}</td>
       <td class="text-center">
-        <button class="delete-btn" title="Delete Track" onclick="deleteTrack('${track.id}')">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="3 6 5 6 21 6" />
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-            <line x1="10" y1="11" x2="10" y2="17" />
-            <line x1="14" y1="11" x2="14" y2="17" />
-          </svg>
-        </button>
+        <div class="track-actions">
+          <div class="playlist-dropdown" data-track-id="${track.id}">
+            <button class="playlist-dropdown-toggle" title="Add to playlist">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </button>
+            <div class="playlist-dropdown-menu hidden"></div>
+          </div>
+          <button class="delete-btn" title="Delete Track" onclick="deleteTrack('${track.id}')">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              <line x1="10" y1="11" x2="10" y2="17" />
+              <line x1="14" y1="11" x2="14" y2="17" />
+            </svg>
+          </button>
+        </div>
       </td>
     `;
 
@@ -1021,6 +1098,539 @@ function scrollRipConsoleToBottom() {
   if (ripConsoleLog) {
     ripConsoleLog.scrollTop = ripConsoleLog.scrollHeight;
   }
+}
+
+/* ==========================================================================
+   Playlist Management
+   ========================================================================== */
+
+function setupPlaylistTab() {
+  newPlaylistBtn.addEventListener('click', createNewPlaylist);
+  deletePlaylistBtn.addEventListener('click', deleteSelectedPlaylist);
+  playlistDetailName.addEventListener('change', renameSelectedPlaylist);
+}
+
+function stopPlaylistPolling() {}
+
+async function loadPlaylists() {
+  try {
+    const res = await fetch('/api/playlists');
+    playlists = await res.json();
+    renderPlaylistList();
+  } catch (err) {
+    console.error('Failed to load playlists:', err);
+  }
+}
+
+function renderPlaylistList() {
+  playlistList.innerHTML = '';
+
+  if (playlists.length === 0) {
+    playlistList.innerHTML = '<div class="playlist-empty"><p>No playlists yet. Click "New Playlist" to create one.</p></div>';
+    return;
+  }
+
+  playlists.forEach(p => {
+    const div = document.createElement('div');
+    div.className = `playlist-list-item${selectedPlaylistId === p.id ? ' active' : ''}`;
+    div.dataset.playlistId = p.id;
+    div.innerHTML = `
+      <div class="playlist-list-item-info">
+        <div class="playlist-list-item-name">${escapeHTML(p.name)}</div>
+        <div class="playlist-list-item-count">${p.trackCount} track${p.trackCount === 1 ? '' : 's'}</div>
+      </div>
+    `;
+    div.addEventListener('click', () => selectPlaylist(p.id));
+    playlistList.appendChild(div);
+  });
+}
+
+async function createNewPlaylist() {
+  const name = prompt('Enter playlist name:');
+  if (!name || !name.trim()) return;
+
+  try {
+    const res = await fetch('/api/playlists', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name.trim() })
+    });
+    if (!res.ok) throw new Error('Failed to create playlist');
+    const playlist = await res.json();
+    await loadPlaylists();
+    selectPlaylist(playlist.id);
+  } catch (err) {
+    console.error('Create playlist error:', err);
+    alert('Failed to create playlist.');
+  }
+}
+
+async function selectPlaylist(id) {
+  selectedPlaylistId = id;
+  renderPlaylistList();
+
+  try {
+    const res = await fetch(`/api/playlists/${id}`);
+    if (!res.ok) throw new Error('Failed to load playlist');
+    const data = await res.json();
+
+    playlistDetail.classList.remove('hidden');
+    playlistDetailTitle.textContent = data.name;
+    playlistDetailName.value = data.name;
+    renderPlaylistTracks(data.tracks || []);
+  } catch (err) {
+    console.error('Select playlist error:', err);
+  }
+}
+
+function renderPlaylistTracks(tracks) {
+  playlistTracksTbody.innerHTML = '';
+
+  if (tracks.length === 0) {
+    playlistTracksTbody.innerHTML = `
+      <tr class="empty-state">
+        <td colspan="5">
+          <div class="empty-state-content">
+            <p>This playlist is empty. Add tracks from the Master tab.</p>
+          </div>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tracks.forEach((track, idx) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="text-center" style="font-family:var(--font-mono);color:var(--text-muted)">${idx + 1}</td>
+      <td>${escapeHTML(track.title)}</td>
+      <td>${escapeHTML(track.artist)}</td>
+      <td class="text-right" style="font-family:var(--font-mono)">${formatTime(track.duration)}</td>
+      <td class="text-center">
+        <button class="delete-btn playlist-remove-btn" data-track-id="${track.id}" title="Remove from playlist">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </td>
+    `;
+    const removeBtn = tr.querySelector('.playlist-remove-btn');
+    removeBtn.addEventListener('click', () => removeTrackFromPlaylist(track.id));
+    playlistTracksTbody.appendChild(tr);
+  });
+}
+
+async function removeTrackFromPlaylist(trackId) {
+  if (!selectedPlaylistId) return;
+  try {
+    const res = await fetch(`/api/playlists/${selectedPlaylistId}/tracks/${trackId}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to remove track');
+    await loadPlaylists();
+    selectPlaylist(selectedPlaylistId);
+    fetchTracks(); // re-render master track list to show updated playlist badges
+  } catch (err) {
+    console.error('Remove track error:', err);
+  }
+}
+
+async function deleteSelectedPlaylist() {
+  if (!selectedPlaylistId) return;
+  if (!confirm('Delete this playlist? Tracks will not be deleted.')) return;
+
+  try {
+    const res = await fetch(`/api/playlists/${selectedPlaylistId}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to delete playlist');
+    selectedPlaylistId = null;
+    playlistDetail.classList.add('hidden');
+    await loadPlaylists();
+  } catch (err) {
+    console.error('Delete playlist error:', err);
+  }
+}
+
+async function renameSelectedPlaylist() {
+  if (!selectedPlaylistId) return;
+  const name = playlistDetailName.value.trim();
+  if (!name) return;
+
+  try {
+    await fetch(`/api/playlists/${selectedPlaylistId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    });
+    playlistDetailTitle.textContent = name;
+    await loadPlaylists();
+  } catch (err) {
+    console.error('Rename playlist error:', err);
+  }
+}
+
+async function addTrackToPlaylist(playlistId, trackId) {
+  try {
+    const res = await fetch(`/api/playlists/${playlistId}/tracks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trackId })
+    });
+    if (!res.ok) throw new Error('Failed to add track');
+    await loadPlaylists();
+    if (selectedPlaylistId === playlistId) {
+      selectPlaylist(playlistId);
+    }
+  } catch (err) {
+    console.error('Add track error:', err);
+  }
+}
+
+function setupPlaylistDropdowns() {
+  document.addEventListener('click', (e) => {
+    const toggle = e.target.closest('.playlist-dropdown-toggle');
+    if (toggle) {
+      e.preventDefault();
+      e.stopPropagation();
+      const dropdown = toggle.closest('.playlist-dropdown');
+      if (!dropdown) return;
+      const menu = dropdown.querySelector('.playlist-dropdown-menu');
+      const isOpen = !menu.classList.contains('hidden');
+      closeAllPlaylistDropdowns();
+      if (!isOpen) openPlaylistDropdown(dropdown, menu);
+      return;
+    }
+
+    const item = e.target.closest('.playlist-dropdown-item');
+    if (item) {
+      e.preventDefault();
+      const dropdown = item.closest('.playlist-dropdown');
+      if (!dropdown) return;
+      const trackId = dropdown.dataset.trackId;
+      const playlistId = item.dataset.playlistId;
+      if (!playlistId) return;
+      addTrackToPlaylist(playlistId, trackId);
+      closeAllPlaylistDropdowns();
+      showPlaylistAddedFeedback(dropdown);
+      return;
+    }
+
+    const newItem = e.target.closest('.playlist-dropdown-new');
+    if (newItem) {
+      e.preventDefault();
+      const dropdown = newItem.closest('.playlist-dropdown');
+      const trackId = dropdown?.dataset.trackId;
+      closeAllPlaylistDropdowns();
+      if (trackId) createPlaylistAndAdd(trackId);
+      else createNewPlaylist();
+      return;
+    }
+
+    closeAllPlaylistDropdowns();
+  });
+}
+
+function closeAllPlaylistDropdowns() {
+  document.querySelectorAll('.playlist-dropdown-menu').forEach(m => m.classList.add('hidden'));
+}
+
+function openPlaylistDropdown(dropdown, menu) {
+  menu.innerHTML = '';
+  const isEmpty = playlists.length === 0;
+
+  if (isEmpty) {
+    const item = document.createElement('div');
+    item.className = 'playlist-dropdown-item playlist-dropdown-new';
+    item.textContent = '+ New Playlist';
+    menu.appendChild(item);
+  } else {
+    playlists.forEach(p => {
+      const item = document.createElement('div');
+      item.className = 'playlist-dropdown-item';
+      item.dataset.playlistId = p.id;
+      item.innerHTML = `
+        <span class="playlist-dd-name">${escapeHTML(p.name)}</span>
+        <span class="playlist-dd-count">${p.trackCount}</span>
+      `;
+      menu.appendChild(item);
+    });
+    const divider = document.createElement('div');
+    divider.className = 'playlist-dropdown-divider';
+    menu.appendChild(divider);
+    const newItem = document.createElement('div');
+    newItem.className = 'playlist-dropdown-item playlist-dropdown-new';
+    newItem.textContent = '+ New Playlist';
+    menu.appendChild(newItem);
+  }
+
+  menu.classList.remove('hidden');
+}
+
+function showPlaylistAddedFeedback(dropdown) {
+  const toggle = dropdown.querySelector('.playlist-dropdown-toggle');
+  toggle.innerHTML = '<span style="font-size:0.65rem;color:var(--state-success);font-weight:700;">✓</span>';
+  toggle.classList.add('added');
+  setTimeout(() => {
+    toggle.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>`;
+    toggle.classList.remove('added');
+  }, 1200);
+}
+
+async function createPlaylistAndAdd(trackId) {
+  const name = prompt('Enter playlist name:');
+  if (!name || !name.trim()) return;
+  try {
+    const res = await fetch('/api/playlists', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name.trim() })
+    });
+    if (!res.ok) throw new Error('Failed to create playlist');
+    const playlist = await res.json();
+    await loadPlaylists();
+    await addTrackToPlaylist(playlist.id, trackId);
+    if (selectedPlaylistId === playlist.id) selectPlaylist(playlist.id);
+    // Re-render track table to get fresh dropdowns
+    renderTracksTable();
+  } catch (err) {
+    console.error('Create playlist error:', err);
+    alert('Failed to create playlist.');
+  }
+}
+
+/* ==========================================================================
+   Spotify Search & Download
+   ========================================================================== */
+
+async function performSearch() {
+  const query = searchInput.value.trim();
+  if (!query) return;
+
+  searchError.classList.add('hidden');
+  searchResults.classList.add('hidden');
+  searchResults.innerHTML = '';
+  searchSpinner.classList.remove('hidden');
+  searchBtn.disabled = true;
+
+  try {
+    const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Search failed');
+    }
+
+    const results = await res.json();
+    renderSearchResults(results);
+  } catch (err) {
+    searchError.textContent = `Search error: ${err.message}`;
+    searchError.classList.remove('hidden');
+    console.error('Search error:', err);
+  } finally {
+    searchSpinner.classList.add('hidden');
+    searchBtn.disabled = false;
+  }
+}
+
+function renderSearchResults(results) {
+  searchResults.innerHTML = '';
+
+  if (results.length === 0) {
+    searchResults.innerHTML = `<div class="search-empty">No results found. Try a different search term.</div>`;
+    searchResults.classList.remove('hidden');
+    return;
+  }
+
+  const list = document.createElement('div');
+  list.className = 'search-result-list';
+
+  results.forEach(track => {
+    const item = document.createElement('div');
+    item.className = 'search-result-item';
+
+    const artUrl = track.albumArt || '';
+    const artHtml = artUrl
+      ? `<img class="search-result-art" src="${escapeHTML(artUrl)}" alt="" loading="lazy">`
+      : `<div class="search-result-art search-result-art-placeholder">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/>
+          </svg>
+        </div>`;
+
+    item.innerHTML = `
+      ${artHtml}
+      <div class="search-result-info">
+        <div class="search-result-title">${escapeHTML(track.title)}</div>
+        <div class="search-result-artist">${escapeHTML(track.artist)}</div>
+        <div class="search-result-meta">
+          <span>${escapeHTML(track.album)}</span>
+          <span class="sep">·</span>
+          <span>${formatTime(track.duration)}</span>
+        </div>
+      </div>
+      <button class="btn btn-sm btn-spotify btn-download-track"
+              data-spotify-url="${escapeHTML(track.spotifyUrl)}"
+              data-title="${escapeHTML(track.title)}"
+              data-artist="${escapeHTML(track.artist)}"
+              data-album="${escapeHTML(track.album)}"
+              data-duration="${track.duration}">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Add to Queue
+      </button>
+    `;
+
+    const addBtn = item.querySelector('.btn-download-track');
+    addBtn.addEventListener('click', () => downloadTrack(addBtn.dataset));
+
+    list.appendChild(item);
+  });
+
+  searchResults.appendChild(list);
+  searchResults.classList.remove('hidden');
+}
+
+async function downloadTrack(data) {
+  if (isDownloading) return;
+  isDownloading = true;
+
+  const buttons = document.querySelectorAll('.btn-download-track');
+  buttons.forEach(b => { b.disabled = true; b.textContent = 'Downloading...'; });
+
+  // Open progress modal
+  openDownloadProgressModal(data.title, data.artist);
+
+  try {
+    const res = await fetch('/api/download', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        spotifyUrl: data.spotifyUrl,
+        title: data.title,
+        artist: data.artist,
+        album: data.album,
+        duration: parseInt(data.duration)
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Download failed');
+    }
+
+    // Refresh the track list
+    fetchTracks();
+
+    // Mark downloaded buttons
+    buttons.forEach(b => {
+      b.disabled = true;
+      b.textContent = 'Added ✓';
+      b.classList.remove('btn-spotify');
+      b.classList.add('btn-added');
+    });
+  } catch (err) {
+    console.error('Download error:', err);
+    downloadConsoleLog.textContent += `\n[Error]: ${err.message}`;
+    downloadDialogBadge.textContent = 'Failed';
+    downloadDialogBadge.className = 'badge';
+    downloadDialogBadge.style.backgroundColor = 'var(--state-danger)';
+    downloadDialogBadge.style.color = 'white';
+    closeDownloadDialogBtn.classList.remove('hidden');
+    setTimeout(() => alert(`Download failed: ${err.message}`), 500);
+    buttons.forEach(b => {
+      if (b.dataset.spotifyUrl === data.spotifyUrl) {
+        b.disabled = false;
+        b.textContent = 'Add to Queue';
+      }
+    });
+  } finally {
+    isDownloading = false;
+  }
+}
+
+function openDownloadProgressModal(title, artist) {
+  downloadConsoleLog.textContent = 'Initialising download...\n';
+  downloadCurrentStepLabel.textContent = 'Connecting to download engine...';
+  downloadOverallPercentageLabel.textContent = '0%';
+  downloadDialogProgressFill.style.width = '0%';
+  downloadTrackTitle.textContent = `${artist || ''} - ${title || 'Track'}`;
+  downloadDialogBadge.textContent = 'Downloading';
+  downloadDialogBadge.className = 'badge badge-active';
+  downloadDialogBadge.style.backgroundColor = '';
+  downloadDialogBadge.style.color = '';
+  closeDownloadDialogBtn.classList.add('hidden');
+
+  downloadProgressDialog.showModal();
+
+  if (downloadEventSource) downloadEventSource.close();
+
+  downloadEventSource = new EventSource('/api/download/progress');
+
+  downloadEventSource.addEventListener('init', (e) => {
+    try {
+      const state = JSON.parse(e.data);
+      if (state.logs && state.logs.length > 0) {
+        downloadConsoleLog.textContent = state.logs.join('\n') + '\n';
+        scrollDownloadConsole();
+      }
+      updateDownloadUI(state);
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
+  downloadEventSource.addEventListener('progress', (e) => {
+    try {
+      const state = JSON.parse(e.data);
+      if (state.logLine) {
+        downloadConsoleLog.textContent += state.logLine + '\n';
+        scrollDownloadConsole();
+      }
+      updateDownloadUI(state);
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
+  downloadEventSource.onerror = () => {};
+}
+
+function updateDownloadUI(state) {
+  downloadCurrentStepLabel.textContent = state.currentStep || 'Working...';
+  downloadOverallPercentageLabel.textContent = `${state.progress}%`;
+  downloadDialogProgressFill.style.width = `${state.progress}%`;
+
+  if (state.status === 'searching' || state.status === 'downloading') {
+    downloadDialogBadge.textContent = state.status === 'searching' ? 'Searching' : 'Downloading';
+    downloadDialogBadge.className = 'badge badge-active';
+  }
+
+  if (state.status === 'success' || state.status === 'failed') {
+    closeDownloadDialogBtn.classList.remove('hidden');
+
+    if (state.status === 'success') {
+      downloadDialogBadge.textContent = 'Completed';
+      downloadDialogBadge.className = 'badge';
+      downloadDialogBadge.style.backgroundColor = 'var(--state-success)';
+      downloadDialogBadge.style.color = 'white';
+    } else {
+      downloadDialogBadge.textContent = 'Failed';
+      downloadDialogBadge.className = 'badge';
+      downloadDialogBadge.style.backgroundColor = 'var(--state-danger)';
+      downloadDialogBadge.style.color = 'white';
+      if (state.error) {
+        downloadConsoleLog.textContent += `\n[Fatal Error]: ${state.error}\n`;
+      }
+    }
+
+    if (downloadEventSource) {
+      downloadEventSource.close();
+      downloadEventSource = null;
+    }
+  }
+}
+
+function scrollDownloadConsole() {
+  downloadConsoleLog.scrollTop = downloadConsoleLog.scrollHeight;
 }
 
 /* ==========================================================================
