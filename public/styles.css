@@ -1866,12 +1866,6 @@ select:focus {
   padding: 0.85rem 1.25rem;
   border-top: 1px solid var(--panel-border);
 }
-
-/* Download progress dialog overrides */
-#download-dialog-progress-fill {
-  background: linear-gradient(90deg, #1db954, #1ed760);
-}
-
 @keyframes spinDisc {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }

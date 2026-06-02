@@ -525,44 +525,6 @@
     </div>
   </dialog>
 
-  <!-- Live Download Progress Modal -->
-  <dialog id="download-progress-dialog" class="progress-dialog">
-    <div class="dialog-content">
-      <div class="dialog-header">
-        <h2 id="download-dialog-title">Downloading from Spotify</h2>
-        <div id="download-dialog-badge" class="badge badge-active">Downloading</div>
-      </div>
-      <div class="dialog-visual" style="padding: 0.5rem 0;">
-        <div style="text-align:center;color:var(--text-muted);font-size:0.9rem;">
-          <span id="download-track-title">Track</span>
-        </div>
-      </div>
-      <div class="progress-section">
-        <div class="progress-meta">
-          <span id="download-current-step-label">Starting download...</span>
-          <span id="download-overall-percentage-label">0%</span>
-        </div>
-        <div class="dialog-progress-bar">
-          <div id="download-dialog-progress-fill" class="dialog-progress-fill" style="box-shadow: 0 0 10px rgba(29, 185, 84, 0.4)"></div>
-        </div>
-      </div>
-      <div class="console-wrapper">
-        <div class="console-header">
-          <span class="console-dot dot-red"></span>
-          <span class="console-dot dot-yellow"></span>
-          <span class="console-dot dot-green"></span>
-          <span class="console-title">spotdl@headless-server:~</span>
-        </div>
-        <pre id="download-console-log" class="console-log" style="color: #1db954">Initialising download...</pre>
-      </div>
-      <div class="dialog-footer">
-        <button id="close-download-dialog-btn" class="btn btn-secondary hidden" autofocus>
-          Dismiss
-        </button>
-      </div>
-    </div>
-  </dialog>
-
   <!-- New Playlist Modal -->
   <dialog id="new-playlist-dialog" class="mini-dialog">
     <div class="mini-dialog-content">

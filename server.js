@@ -1070,7 +1070,7 @@ app.get('/api/rip/progress', (req, res) => {
 });
 
 /* =======================================
-   SPOTIFY SEARCH & DOWNLOAD (with SSE)
+   SPOTIFY SEARCH & DOWNLOAD
    ======================================= */
 
 let spotifyToken = null;
@@ -1106,38 +1106,6 @@ async function getSpotifyToken() {
   spotifyToken = data.access_token;
   spotifyTokenExpires = Date.now() + (data.expires_in - 60) * 1000;
   return spotifyToken;
-}
-
-// Download job state + SSE clients
-let activeDownloadJob = {
-  status: 'idle',
-  progress: 0,
-  currentStep: '',
-  logs: [],
-  error: null,
-  title: ''
-};
-
-let sseDownloadClients = [];
-
-function broadcastDownloadStatus(logLine) {
-  if (logLine) {
-    activeDownloadJob.logs.push(logLine);
-    if (activeDownloadJob.logs.length > 200) activeDownloadJob.logs.shift();
-  }
-
-  const data = JSON.stringify({
-    status: activeDownloadJob.status,
-    progress: activeDownloadJob.progress,
-    currentStep: activeDownloadJob.currentStep,
-    title: activeDownloadJob.title,
-    logLine,
-    error: activeDownloadJob.error
-  });
-
-  sseDownloadClients.forEach(client => {
-    client.write(`event: progress\ndata: ${data}\n\n`);
-  });
 }
 
 // Search Spotify
@@ -1179,7 +1147,7 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// Download a track via spotdl (async with SSE)
+// Download a track via spotdl (synchronous — waits for completion)
 app.post('/api/download', async (req, res) => {
   const { spotifyUrl, title, artist, album, duration } = req.body;
 
@@ -1187,7 +1155,6 @@ app.post('/api/download', async (req, res) => {
     return res.status(400).json({ error: 'spotifyUrl is required.' });
   }
 
-  // Check spotdl is available
   let spotdlBin = 'spotdl';
   try {
     execSync('which spotdl', { stdio: 'ignore' });
@@ -1217,17 +1184,6 @@ app.post('/api/download', async (req, res) => {
     return res.status(201).json({ track, cached: true });
   }
 
-  // Init download job
-  activeDownloadJob.status = 'searching';
-  activeDownloadJob.progress = 0;
-  activeDownloadJob.currentStep = 'Searching and fetching...';
-  activeDownloadJob.title = `${artist} - ${title}`;
-  activeDownloadJob.error = null;
-  activeDownloadJob.logs = [];
-  broadcastDownloadStatus(`>>> Downloading: ${artist} - ${title}`);
-
-  res.json({ success: true, message: 'Download started.', title: activeDownloadJob.title });
-
   try {
     await new Promise((resolve, reject) => {
       const proc = spawn(spotdlBin, [
@@ -1243,32 +1199,7 @@ app.post('/api/download', async (req, res) => {
       });
 
       let stderrLog = '';
-
-      proc.stdout.on('data', (chunk) => {
-        const text = chunk.toString();
-        broadcastDownloadStatus(text.trim());
-      });
-
-      proc.stderr.on('data', (chunk) => {
-        const text = chunk.toString();
-        stderrLog += text;
-
-        // Parse yt-dlp progress: [download]  42.5% of ~5.20MiB at ...
-        const progressMatch = text.match(/\[download\].*?(\d+\.?\d*)%/);
-        if (progressMatch) {
-          const pct = parseFloat(progressMatch[1]);
-          activeDownloadJob.progress = Math.min(Math.round(pct), 99);
-          activeDownloadJob.status = 'downloading';
-          activeDownloadJob.currentStep = `Downloading... ${activeDownloadJob.progress}%`;
-        }
-
-        // Track individual lines
-        text.split('\n').filter(Boolean).forEach(line => {
-          if (!line.includes('[download]') || line.includes('% of')) {
-            broadcastDownloadStatus(line.trim());
-          }
-        });
-      });
+      proc.stderr.on('data', (chunk) => stderrLog += chunk.toString());
 
       proc.on('close', async (code) => {
         if (code !== 0) {
@@ -1282,10 +1213,6 @@ app.post('/api/download', async (req, res) => {
         }
 
         try {
-          activeDownloadJob.status = 'processing';
-          activeDownloadJob.currentStep = 'Processing metadata...';
-          broadcastDownloadStatus('Processing downloaded file...');
-
           const meta = await extractMetadata(outputPath, safeName);
           const entry = {
             id: `track-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -1299,12 +1226,6 @@ app.post('/api/download', async (req, res) => {
             mimeType: 'audio/mpeg'
           };
           tracks.push(entry);
-
-          activeDownloadJob.status = 'success';
-          activeDownloadJob.progress = 100;
-          activeDownloadJob.currentStep = 'Complete!';
-          broadcastDownloadStatus('Download complete!');
-
           resolve(entry);
         } catch (err) {
           reject(new Error(`Failed to process downloaded file: ${err.message}`));
@@ -1313,36 +1234,12 @@ app.post('/api/download', async (req, res) => {
 
       proc.on('error', (err) => reject(err));
     });
+
+    res.status(201).json({ track: tracks[tracks.length - 1] });
   } catch (err) {
-    activeDownloadJob.status = 'failed';
-    activeDownloadJob.error = err.message;
-    activeDownloadJob.currentStep = 'Failed';
-    broadcastDownloadStatus(`!!! ERROR: ${err.message}`);
     console.error('Download Error:', err);
+    res.status(500).json({ error: err.message });
   }
-});
-
-// Download progress SSE
-app.get('/api/download/progress', (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-
-  sseDownloadClients.push(res);
-
-  const initialData = JSON.stringify({
-    status: activeDownloadJob.status,
-    progress: activeDownloadJob.progress,
-    currentStep: activeDownloadJob.currentStep,
-    title: activeDownloadJob.title,
-    logs: activeDownloadJob.logs,
-    error: activeDownloadJob.error
-  });
-  res.write(`event: init\ndata: ${initialData}\n\n`);
-
-  req.on('close', () => {
-    sseDownloadClients = sseDownloadClients.filter(c => c !== res);
-  });
 });
 
 /* =======================================

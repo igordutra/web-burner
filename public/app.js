@@ -52,30 +52,6 @@ let isDownloading = false;
 // Playlist State
 let playlists = [];
 let selectedPlaylistId = null;
-let downloadEventSource = null;
-
-// DOM Elements - Navigation & Archiving
-const tabMaster = document.getElementById('tab-master');
-const tabRip = document.getElementById('tab-rip');
-const masterView = document.getElementById('master-view');
-const ripView = document.getElementById('rip-view');
-
-const refreshCDBtn = document.getElementById('refresh-cd-btn');
-const ripAlbumInput = document.getElementById('rip-album-input');
-const ripArtistInput = document.getElementById('rip-artist-input');
-const ripTracksTbody = document.getElementById('rip-tracks-tbody');
-
-const laserLensCD = document.getElementById('laser-lens-cd');
-const ripDriveTitle = document.getElementById('rip-drive-title');
-const ripDriveSubtitle = document.getElementById('rip-drive-subtitle');
-
-const ripDriveSelect = document.getElementById('rip-drive-select');
-const ripFormatSelect = document.getElementById('rip-format-select');
-const ripBtn = document.getElementById('rip-btn');
-
-const ripProgressDialog = document.getElementById('rip-progress-dialog');
-const closeRipDialogBtn = document.getElementById('close-rip-dialog-btn');
-
 // DOM Elements - Playlists
 const tabPlaylists = document.getElementById('tab-playlists');
 const playlistsView = document.getElementById('playlists-view');
@@ -86,17 +62,6 @@ const playlistDetailTitle = document.getElementById('playlist-detail-title');
 const playlistDetailName = document.getElementById('playlist-detail-name');
 const playlistTracksTbody = document.getElementById('playlist-tracks-tbody');
 const deletePlaylistBtn = document.getElementById('delete-playlist-btn');
-
-// DOM Elements - Download Progress
-const downloadProgressDialog = document.getElementById('download-progress-dialog');
-const downloadDialogTitle = document.getElementById('download-dialog-title');
-const downloadDialogBadge = document.getElementById('download-dialog-badge');
-const downloadTrackTitle = document.getElementById('download-track-title');
-const downloadCurrentStepLabel = document.getElementById('download-current-step-label');
-const downloadOverallPercentageLabel = document.getElementById('download-overall-percentage-label');
-const downloadDialogProgressFill = document.getElementById('download-dialog-progress-fill');
-const downloadConsoleLog = document.getElementById('download-console-log');
-const closeDownloadDialogBtn = document.getElementById('close-download-dialog-btn');
 
 // DOM Elements - New Playlist Modal
 const newPlaylistDialog = document.getElementById('new-playlist-dialog');
@@ -146,15 +111,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (ripEventSource) {
       ripEventSource.close();
       ripEventSource = null;
-    }
-  });
-
-  // Close download dialog action
-  closeDownloadDialogBtn.addEventListener('click', () => {
-    downloadProgressDialog.close();
-    if (downloadEventSource) {
-      downloadEventSource.close();
-      downloadEventSource = null;
     }
   });
 
@@ -1513,9 +1469,6 @@ async function downloadTrack(data) {
   const buttons = document.querySelectorAll('.btn-download-track');
   buttons.forEach(b => { b.disabled = true; b.textContent = 'Downloading...'; });
 
-  // Open progress modal
-  openDownloadProgressModal(data.title, data.artist);
-
   try {
     const res = await fetch('/api/download', {
       method: 'POST',
@@ -1534,10 +1487,8 @@ async function downloadTrack(data) {
       throw new Error(err.error || 'Download failed');
     }
 
-    // Refresh the track list
     fetchTracks();
 
-    // Mark downloaded buttons
     buttons.forEach(b => {
       b.disabled = true;
       b.textContent = 'Added ✓';
@@ -1546,13 +1497,7 @@ async function downloadTrack(data) {
     });
   } catch (err) {
     console.error('Download error:', err);
-    downloadConsoleLog.textContent += `\n[Error]: ${err.message}`;
-    downloadDialogBadge.textContent = 'Failed';
-    downloadDialogBadge.className = 'badge';
-    downloadDialogBadge.style.backgroundColor = 'var(--state-danger)';
-    downloadDialogBadge.style.color = 'white';
-    closeDownloadDialogBtn.classList.remove('hidden');
-    setTimeout(() => alert(`Download failed: ${err.message}`), 500);
+    alert(`Download failed: ${err.message}`);
     buttons.forEach(b => {
       if (b.dataset.spotifyUrl === data.spotifyUrl) {
         b.disabled = false;
@@ -1562,92 +1507,6 @@ async function downloadTrack(data) {
   } finally {
     isDownloading = false;
   }
-}
-
-function openDownloadProgressModal(title, artist) {
-  downloadConsoleLog.textContent = 'Initialising download...\n';
-  downloadCurrentStepLabel.textContent = 'Connecting to download engine...';
-  downloadOverallPercentageLabel.textContent = '0%';
-  downloadDialogProgressFill.style.width = '0%';
-  downloadTrackTitle.textContent = `${artist || ''} - ${title || 'Track'}`;
-  downloadDialogBadge.textContent = 'Downloading';
-  downloadDialogBadge.className = 'badge badge-active';
-  downloadDialogBadge.style.backgroundColor = '';
-  downloadDialogBadge.style.color = '';
-  closeDownloadDialogBtn.classList.add('hidden');
-
-  downloadProgressDialog.showModal();
-
-  if (downloadEventSource) downloadEventSource.close();
-
-  downloadEventSource = new EventSource('/api/download/progress');
-
-  downloadEventSource.addEventListener('init', (e) => {
-    try {
-      const state = JSON.parse(e.data);
-      if (state.logs && state.logs.length > 0) {
-        downloadConsoleLog.textContent = state.logs.join('\n') + '\n';
-        scrollDownloadConsole();
-      }
-      updateDownloadUI(state);
-    } catch (err) {
-      console.error(err);
-    }
-  });
-
-  downloadEventSource.addEventListener('progress', (e) => {
-    try {
-      const state = JSON.parse(e.data);
-      if (state.logLine) {
-        downloadConsoleLog.textContent += state.logLine + '\n';
-        scrollDownloadConsole();
-      }
-      updateDownloadUI(state);
-    } catch (err) {
-      console.error(err);
-    }
-  });
-
-  downloadEventSource.onerror = () => {};
-}
-
-function updateDownloadUI(state) {
-  downloadCurrentStepLabel.textContent = state.currentStep || 'Working...';
-  downloadOverallPercentageLabel.textContent = `${state.progress}%`;
-  downloadDialogProgressFill.style.width = `${state.progress}%`;
-
-  if (state.status === 'searching' || state.status === 'downloading') {
-    downloadDialogBadge.textContent = state.status === 'searching' ? 'Searching' : 'Downloading';
-    downloadDialogBadge.className = 'badge badge-active';
-  }
-
-  if (state.status === 'success' || state.status === 'failed') {
-    closeDownloadDialogBtn.classList.remove('hidden');
-
-    if (state.status === 'success') {
-      downloadDialogBadge.textContent = 'Completed';
-      downloadDialogBadge.className = 'badge';
-      downloadDialogBadge.style.backgroundColor = 'var(--state-success)';
-      downloadDialogBadge.style.color = 'white';
-    } else {
-      downloadDialogBadge.textContent = 'Failed';
-      downloadDialogBadge.className = 'badge';
-      downloadDialogBadge.style.backgroundColor = 'var(--state-danger)';
-      downloadDialogBadge.style.color = 'white';
-      if (state.error) {
-        downloadConsoleLog.textContent += `\n[Fatal Error]: ${state.error}\n`;
-      }
-    }
-
-    if (downloadEventSource) {
-      downloadEventSource.close();
-      downloadEventSource = null;
-    }
-  }
-}
-
-function scrollDownloadConsole() {
-  downloadConsoleLog.scrollTop = downloadConsoleLog.scrollHeight;
 }
 
 /* ==========================================================================
