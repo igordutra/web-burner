@@ -1221,8 +1221,9 @@ async function selectPlaylist(id) {
 }
 
 /* ==========================================================================
-   Spotify Search & Download
+   Playlist Tracks Render
    ========================================================================== */
+function renderPlaylistTracks(tracks) {
   playlistTracksTbody.innerHTML = '';
 
   if (tracks.length === 0) {
