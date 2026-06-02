@@ -563,6 +563,30 @@
     </div>
   </dialog>
 
+  <!-- New Playlist Modal -->
+  <dialog id="new-playlist-dialog" class="mini-dialog">
+    <div class="mini-dialog-content">
+      <div class="mini-dialog-header">
+        <h3>New Playlist</h3>
+        <button class="mini-dialog-close" id="new-playlist-close">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <form id="new-playlist-form" onsubmit="return false;">
+        <div class="mini-dialog-body">
+          <label for="new-playlist-name-input" class="mini-dialog-label">Playlist name</label>
+          <input type="text" id="new-playlist-name-input" class="text-input" placeholder="e.g. Summer Hits" autofocus>
+        </div>
+        <div class="mini-dialog-footer">
+          <button type="button" id="new-playlist-cancel" class="btn btn-text">Cancel</button>
+          <button type="submit" id="new-playlist-submit" class="btn btn-primary">Create</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
   <!-- Footnote -->
   <footer class="app-footer-note">
     <p>silky-bohr-burner &bull; pairs raw ffmpeg pipelines with modern optical writing layers &bull; Crafted with care.</p>

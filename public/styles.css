@@ -1669,6 +1669,17 @@ select:focus {
   height: 100%;
 }
 
+.playlist-list-card .card-header-horizontal {
+  padding: 1rem 1.25rem;
+  margin: 0;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.playlist-list-card .card-header-horizontal h2 {
+  font-size: 1rem;
+  margin: 0 !important;
+}
+
 .playlist-list {
   flex: 1;
   overflow-y: auto;
@@ -1736,8 +1747,19 @@ select:focus {
   height: 100%;
 }
 
+.playlist-detail-card .card-header-horizontal {
+  padding: 1rem 1.25rem;
+  margin: 0;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.playlist-detail-card .card-header-horizontal h2 {
+  font-size: 1rem;
+  margin: 0 !important;
+}
+
 .playlist-detail-meta {
-  padding: 0.85rem 1.25rem;
+  padding: 0.75rem 1.25rem;
   border-bottom: 1px solid var(--panel-border);
 }
 
@@ -1767,118 +1789,82 @@ select:focus {
   gap: 0.5rem;
 }
 
-/* Track actions row: playlist dropdown + delete btn */
-.track-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  justify-content: center;
-}
-
-/* Custom Playlist Dropdown Trigger */
-.playlist-dropdown {
-  position: relative;
-  display: inline-flex;
-}
-
-.playlist-dropdown-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
-  border: 1px solid var(--panel-border);
-  background: rgba(255,255,255,0.04);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all var(--transition-fast);
+/* ==========================================================================
+   Mini Dialog (New Playlist modal)
+   ========================================================================== */
+.mini-dialog {
   padding: 0;
-}
-
-.playlist-dropdown-toggle:hover {
-  border-color: var(--accent-primary);
-  color: var(--accent-primary);
-  background: rgba(139, 92, 246, 0.1);
-}
-
-.playlist-dropdown-toggle.added {
-  border-color: var(--state-success);
-  background: rgba(16, 185, 129, 0.1);
-}
-
-/* Dropdown Menu */
-.playlist-dropdown-menu {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  z-index: 100;
-  min-width: 180px;
-  margin-top: 4px;
-  background: var(--bg-secondary);
   border: 1px solid var(--panel-border);
-  border-radius: 8px;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
-  padding: 0.35rem;
-  backdrop-filter: blur(16px);
+  border-radius: var(--radius-lg);
+  background: var(--bg-secondary);
+  box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+  min-width: 340px;
+  max-width: 400px;
+  backdrop-filter: blur(24px);
 }
 
-.playlist-dropdown-item {
+.mini-dialog::backdrop {
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+}
+
+.mini-dialog-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.mini-dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.mini-dialog-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.mini-dialog-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  transition: background var(--transition-fast);
-  white-space: nowrap;
+  transition: color var(--transition-fast);
 }
 
-.playlist-dropdown-item:hover {
-  background: rgba(255,255,255,0.06);
+.mini-dialog-close:hover {
   color: var(--text-main);
 }
 
-.playlist-dropdown-item:active {
-  background: rgba(139, 92, 246, 0.15);
+.mini-dialog-body {
+  padding: 1.25rem;
 }
 
-.playlist-dd-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.playlist-dd-count {
-  font-size: 0.7rem;
-  color: var(--text-dark);
-  font-family: var(--font-mono);
-  min-width: 1.5rem;
-  text-align: right;
-}
-
-.playlist-dropdown-divider {
-  height: 1px;
-  background: var(--panel-border);
-  margin: 0.25rem 0.5rem;
-}
-
-.playlist-dropdown-new {
-  color: var(--accent-primary);
+.mini-dialog-label {
+  display: block;
+  font-size: 0.8rem;
   font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
 }
 
-.playlist-dropdown-new:hover {
-  color: #a78bfa;
+.mini-dialog-body .text-input {
+  width: 100%;
 }
 
-.playlist-added-feedback {
-  font-size: 0.7rem;
-  color: var(--state-success);
-  font-weight: 600;
+.mini-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.85rem 1.25rem;
+  border-top: 1px solid var(--panel-border);
 }
 
 /* Download progress dialog overrides */

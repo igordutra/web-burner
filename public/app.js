@@ -98,6 +98,14 @@ const downloadDialogProgressFill = document.getElementById('download-dialog-prog
 const downloadConsoleLog = document.getElementById('download-console-log');
 const closeDownloadDialogBtn = document.getElementById('close-download-dialog-btn');
 
+// DOM Elements - New Playlist Modal
+const newPlaylistDialog = document.getElementById('new-playlist-dialog');
+const newPlaylistNameInput = document.getElementById('new-playlist-name-input');
+const newPlaylistSubmit = document.getElementById('new-playlist-submit');
+const newPlaylistCancel = document.getElementById('new-playlist-cancel');
+const newPlaylistClose = document.getElementById('new-playlist-close');
+let pendingPlaylistTrackId = null;
+
 /* ==========================================================================
    Initialisation
    ========================================================================== */
@@ -1105,9 +1113,58 @@ function scrollRipConsoleToBottom() {
    ========================================================================== */
 
 function setupPlaylistTab() {
-  newPlaylistBtn.addEventListener('click', createNewPlaylist);
+  newPlaylistBtn.addEventListener('click', () => openNewPlaylistModal(null));
   deletePlaylistBtn.addEventListener('click', deleteSelectedPlaylist);
   playlistDetailName.addEventListener('change', renameSelectedPlaylist);
+
+  // New Playlist modal
+  newPlaylistSubmit.addEventListener('click', submitNewPlaylist);
+  newPlaylistCancel.addEventListener('click', closeNewPlaylistModal);
+  newPlaylistClose.addEventListener('click', closeNewPlaylistModal);
+  newPlaylistDialog.addEventListener('close', () => { pendingPlaylistTrackId = null; });
+  newPlaylistNameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submitNewPlaylist();
+  });
+}
+
+function openNewPlaylistModal(trackId) {
+  pendingPlaylistTrackId = trackId;
+  newPlaylistNameInput.value = '';
+  newPlaylistDialog.showModal();
+  setTimeout(() => newPlaylistNameInput.focus(), 100);
+}
+
+function closeNewPlaylistModal() {
+  newPlaylistDialog.close();
+  pendingPlaylistTrackId = null;
+}
+
+async function submitNewPlaylist() {
+  const name = newPlaylistNameInput.value.trim();
+  if (!name) return;
+
+  try {
+    const res = await fetch('/api/playlists', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    });
+    if (!res.ok) throw new Error('Failed to create playlist');
+    const playlist = await res.json();
+    await loadPlaylists();
+    closeNewPlaylistModal();
+
+    if (pendingPlaylistTrackId) {
+      await addTrackToPlaylist(playlist.id, pendingPlaylistTrackId);
+      pendingPlaylistTrackId = null;
+      renderTracksTable();
+    } else {
+      selectPlaylist(playlist.id);
+    }
+  } catch (err) {
+    console.error('Create playlist error:', err);
+    alert('Failed to create playlist.');
+  }
 }
 
 function stopPlaylistPolling() {}
@@ -1145,26 +1202,6 @@ function renderPlaylistList() {
   });
 }
 
-async function createNewPlaylist() {
-  const name = prompt('Enter playlist name:');
-  if (!name || !name.trim()) return;
-
-  try {
-    const res = await fetch('/api/playlists', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name.trim() })
-    });
-    if (!res.ok) throw new Error('Failed to create playlist');
-    const playlist = await res.json();
-    await loadPlaylists();
-    selectPlaylist(playlist.id);
-  } catch (err) {
-    console.error('Create playlist error:', err);
-    alert('Failed to create playlist.');
-  }
-}
-
 async function selectPlaylist(id) {
   selectedPlaylistId = id;
   renderPlaylistList();
@@ -1183,7 +1220,9 @@ async function selectPlaylist(id) {
   }
 }
 
-function renderPlaylistTracks(tracks) {
+/* ==========================================================================
+   Spotify Search & Download
+   ========================================================================== */
   playlistTracksTbody.innerHTML = '';
 
   if (tracks.length === 0) {
@@ -1318,8 +1357,7 @@ function setupPlaylistDropdowns() {
       const dropdown = newItem.closest('.playlist-dropdown');
       const trackId = dropdown?.dataset.trackId;
       closeAllPlaylistDropdowns();
-      if (trackId) createPlaylistAndAdd(trackId);
-      else createNewPlaylist();
+      openNewPlaylistModal(trackId);
       return;
     }
 
@@ -1371,28 +1409,6 @@ function showPlaylistAddedFeedback(dropdown) {
     toggle.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>`;
     toggle.classList.remove('added');
   }, 1200);
-}
-
-async function createPlaylistAndAdd(trackId) {
-  const name = prompt('Enter playlist name:');
-  if (!name || !name.trim()) return;
-  try {
-    const res = await fetch('/api/playlists', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name.trim() })
-    });
-    if (!res.ok) throw new Error('Failed to create playlist');
-    const playlist = await res.json();
-    await loadPlaylists();
-    await addTrackToPlaylist(playlist.id, trackId);
-    if (selectedPlaylistId === playlist.id) selectPlaylist(playlist.id);
-    // Re-render track table to get fresh dropdowns
-    renderTracksTable();
-  } catch (err) {
-    console.error('Create playlist error:', err);
-    alert('Failed to create playlist.');
-  }
 }
 
 /* ==========================================================================
