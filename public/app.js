@@ -93,6 +93,14 @@ const newPlaylistCancel = document.getElementById('new-playlist-cancel');
 const newPlaylistClose = document.getElementById('new-playlist-close');
 let pendingPlaylistTrackId = null;
 
+// DOM Elements - Add to Playlist Modal
+const addToPlaylistDialog = document.getElementById('add-to-playlist-dialog');
+const addToPlaylistList = document.getElementById('add-to-playlist-list');
+const addToPlaylistNew = document.getElementById('add-to-playlist-new');
+const addToPlaylistCancel = document.getElementById('add-to-playlist-cancel');
+const addToPlaylistClose = document.getElementById('add-to-playlist-close');
+let addToPlaylistPendingTrackId = null;
+
 /* ==========================================================================
    Initialisation
    ========================================================================== */
@@ -105,7 +113,6 @@ document.addEventListener('DOMContentLoaded', () => {
   setupTabControls();
   setupCDDetection();
   setupPlaylistTab();
-  setupPlaylistDropdowns();
   loadPlaylists();
 
   // Clear all button action
@@ -498,15 +505,12 @@ function renderTracksTable() {
       <td class="track-size-cell text-right">${sizeStr}</td>
       <td class="text-center">
         <div class="track-actions">
-          <div class="playlist-dropdown" data-track-id="${track.id}">
-            <button class="playlist-dropdown-toggle" title="Add to playlist">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-            </button>
-            <div class="playlist-dropdown-menu hidden"></div>
-          </div>
+          <button class="playlist-add-btn" data-track-id="${track.id}" title="Add to playlist">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </button>
           <button class="delete-btn" title="Delete Track" onclick="deleteTrack('${track.id}')">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="3 6 5 6 21 6" />
@@ -518,6 +522,9 @@ function renderTracksTable() {
         </div>
       </td>
     `;
+
+    const addBtn = tr.querySelector('.playlist-add-btn');
+    addBtn.addEventListener('click', () => openAddToPlaylistModal(track.id));
 
     tracksTbody.appendChild(tr);
   });
@@ -1104,6 +1111,63 @@ function setupPlaylistTab() {
   newPlaylistNameInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') submitNewPlaylist();
   });
+
+  // Add to Playlist modal
+  addToPlaylistCancel.addEventListener('click', closeAddToPlaylistModal);
+  addToPlaylistClose.addEventListener('click', closeAddToPlaylistModal);
+  addToPlaylistNew.addEventListener('click', () => {
+    const tid = addToPlaylistPendingTrackId;
+    closeAddToPlaylistModal();
+    if (tid) openNewPlaylistModal(tid);
+  });
+  addToPlaylistDialog.addEventListener('close', () => { addToPlaylistPendingTrackId = null; });
+}
+
+function openAddToPlaylistModal(trackId) {
+  addToPlaylistPendingTrackId = trackId;
+  renderAddToPlaylistList();
+  addToPlaylistDialog.showModal();
+}
+
+function closeAddToPlaylistModal() {
+  addToPlaylistDialog.close();
+}
+
+function renderAddToPlaylistList() {
+  addToPlaylistList.innerHTML = '';
+
+  if (playlists.length === 0) {
+    addToPlaylistList.innerHTML = '<div class="add-to-playlist-empty">No playlists yet.<br>Click "+ New Playlist" to create one.</div>';
+    return;
+  }
+
+  playlists.forEach(p => {
+    const item = document.createElement('div');
+    item.className = 'add-to-playlist-item';
+    item.innerHTML = `
+      <span class="add-to-playlist-item-name">${escapeHTML(p.name)}</span>
+      <span class="add-to-playlist-item-count">${p.trackCount}</span>
+    `;
+    item.addEventListener('click', async () => {
+      const tid = addToPlaylistPendingTrackId;
+      if (!tid) return;
+      await addTrackToPlaylist(p.id, tid);
+      closeAddToPlaylistModal();
+      showTrackAddedFeedback();
+    });
+    addToPlaylistList.appendChild(item);
+  });
+}
+
+function showTrackAddedFeedback() {
+  const btn = document.querySelector(`.playlist-add-btn[data-track-id="${addToPlaylistPendingTrackId}"]`);
+  if (!btn) return;
+  btn.innerHTML = '<span style="font-size:0.65rem;color:var(--state-success);font-weight:700;">✓</span>';
+  btn.classList.add('added');
+  setTimeout(() => {
+    btn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>`;
+    btn.classList.remove('added');
+  }, 1200);
 }
 
 function openNewPlaylistModal(trackId) {
@@ -1320,95 +1384,6 @@ async function addTrackToPlaylist(playlistId, trackId) {
   } catch (err) {
     console.error('Add track error:', err);
   }
-}
-
-function setupPlaylistDropdowns() {
-  document.addEventListener('click', (e) => {
-    const toggle = e.target.closest('.playlist-dropdown-toggle');
-    if (toggle) {
-      e.preventDefault();
-      e.stopPropagation();
-      const dropdown = toggle.closest('.playlist-dropdown');
-      if (!dropdown) return;
-      const menu = dropdown.querySelector('.playlist-dropdown-menu');
-      const isOpen = !menu.classList.contains('hidden');
-      closeAllPlaylistDropdowns();
-      if (!isOpen) openPlaylistDropdown(dropdown, menu);
-      return;
-    }
-
-    const item = e.target.closest('.playlist-dropdown-item');
-    if (item) {
-      e.preventDefault();
-      const dropdown = item.closest('.playlist-dropdown');
-      if (!dropdown) return;
-      const trackId = dropdown.dataset.trackId;
-      const playlistId = item.dataset.playlistId;
-      if (!playlistId) return;
-      addTrackToPlaylist(playlistId, trackId);
-      closeAllPlaylistDropdowns();
-      showPlaylistAddedFeedback(dropdown);
-      return;
-    }
-
-    const newItem = e.target.closest('.playlist-dropdown-new');
-    if (newItem) {
-      e.preventDefault();
-      const dropdown = newItem.closest('.playlist-dropdown');
-      const trackId = dropdown?.dataset.trackId;
-      closeAllPlaylistDropdowns();
-      openNewPlaylistModal(trackId);
-      return;
-    }
-
-    closeAllPlaylistDropdowns();
-  });
-}
-
-function closeAllPlaylistDropdowns() {
-  document.querySelectorAll('.playlist-dropdown-menu').forEach(m => m.classList.add('hidden'));
-}
-
-function openPlaylistDropdown(dropdown, menu) {
-  menu.innerHTML = '';
-  const isEmpty = playlists.length === 0;
-
-  if (isEmpty) {
-    const item = document.createElement('div');
-    item.className = 'playlist-dropdown-item playlist-dropdown-new';
-    item.textContent = '+ New Playlist';
-    menu.appendChild(item);
-  } else {
-    playlists.forEach(p => {
-      const item = document.createElement('div');
-      item.className = 'playlist-dropdown-item';
-      item.dataset.playlistId = p.id;
-      item.innerHTML = `
-        <span class="playlist-dd-name">${escapeHTML(p.name)}</span>
-        <span class="playlist-dd-count">${p.trackCount}</span>
-      `;
-      menu.appendChild(item);
-    });
-    const divider = document.createElement('div');
-    divider.className = 'playlist-dropdown-divider';
-    menu.appendChild(divider);
-    const newItem = document.createElement('div');
-    newItem.className = 'playlist-dropdown-item playlist-dropdown-new';
-    newItem.textContent = '+ New Playlist';
-    menu.appendChild(newItem);
-  }
-
-  menu.classList.remove('hidden');
-}
-
-function showPlaylistAddedFeedback(dropdown) {
-  const toggle = dropdown.querySelector('.playlist-dropdown-toggle');
-  toggle.innerHTML = '<span style="font-size:0.65rem;color:var(--state-success);font-weight:700;">✓</span>';
-  toggle.classList.add('added');
-  setTimeout(() => {
-    toggle.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>`;
-    toggle.classList.remove('added');
-  }, 1200);
 }
 
 /* ==========================================================================

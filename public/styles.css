@@ -1795,6 +1795,90 @@ select:focus {
   gap: 0.5rem;
 }
 
+/* Track actions row */
+.track-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  justify-content: center;
+}
+
+.playlist-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 1px solid var(--panel-border);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  padding: 0;
+}
+
+.playlist-add-btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: rgba(139, 92, 246, 0.1);
+}
+
+.playlist-add-btn.added {
+  border-color: var(--state-success);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+/* Add to Playlist Modal list */
+.add-to-playlist-list {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.add-to-playlist-empty {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.add-to-playlist-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.85rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.add-to-playlist-item:hover {
+  background: rgba(255,255,255,0.06);
+  color: var(--text-main);
+}
+
+.add-to-playlist-item:active {
+  background: rgba(139, 92, 246, 0.15);
+}
+
+.add-to-playlist-item-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.add-to-playlist-item-count {
+  font-size: 0.7rem;
+  color: var(--text-dark);
+  font-family: var(--font-mono);
+  min-width: 1.5rem;
+  text-align: right;
+  margin-left: 0.5rem;
+}
+
 /* ==========================================================================
    Mini Dialog (New Playlist modal)
    ========================================================================== */
