@@ -1890,7 +1890,9 @@ select:focus {
   box-shadow: 0 24px 80px rgba(0,0,0,0.6);
   min-width: 340px;
   max-width: 400px;
+  width: fit-content;
   backdrop-filter: blur(24px);
+  margin: auto;
 }
 
 .mini-dialog::backdrop {
