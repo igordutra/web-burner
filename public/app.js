@@ -1496,7 +1496,7 @@ function renderSearchResults(results) {
     `;
 
     const addBtn = item.querySelector('.btn-download-track');
-    addBtn.addEventListener('click', () => downloadTrack(addBtn.dataset));
+    addBtn.addEventListener('click', (e) => downloadTrack(addBtn.dataset, addBtn));
 
     list.appendChild(item);
   });
@@ -1505,12 +1505,12 @@ function renderSearchResults(results) {
   searchResults.classList.remove('hidden');
 }
 
-async function downloadTrack(data) {
+async function downloadTrack(data, btn) {
   if (isDownloading) return;
   isDownloading = true;
 
-  const buttons = document.querySelectorAll('.btn-download-track');
-  buttons.forEach(b => { b.disabled = true; b.textContent = 'Downloading...'; });
+  btn.disabled = true;
+  btn.textContent = 'Downloading...';
 
   try {
     const res = await fetch('/api/download', {
@@ -1532,21 +1532,15 @@ async function downloadTrack(data) {
 
     fetchTracks();
 
-    buttons.forEach(b => {
-      b.disabled = true;
-      b.textContent = 'Added ✓';
-      b.classList.remove('btn-spotify');
-      b.classList.add('btn-added');
-    });
+    btn.disabled = true;
+    btn.textContent = 'Added ✓';
+    btn.classList.remove('btn-spotify');
+    btn.classList.add('btn-added');
   } catch (err) {
     console.error('Download error:', err);
     alert(`Download failed: ${err.message}`);
-    buttons.forEach(b => {
-      if (b.dataset.spotifyUrl === data.spotifyUrl) {
-        b.disabled = false;
-        b.textContent = 'Add to Queue';
-      }
-    });
+    btn.disabled = false;
+    btn.textContent = 'Add to Queue';
   } finally {
     isDownloading = false;
   }
