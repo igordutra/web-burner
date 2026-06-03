@@ -1072,6 +1072,7 @@ function setupPlaylistTab() {
   newPlaylistBtn.addEventListener('click', () => openNewPlaylistModal(null));
   deletePlaylistBtn.addEventListener('click', deleteSelectedPlaylist);
   playlistDetailName.addEventListener('change', renameSelectedPlaylist);
+  document.getElementById('burn-playlist-btn').addEventListener('click', burnSelectedPlaylist);
 
   // New Playlist modal
   newPlaylistSubmit.addEventListener('click', submitNewPlaylist);
@@ -1259,6 +1260,26 @@ async function renameSelectedPlaylist() {
     await loadPlaylists();
   } catch (err) {
     console.error('Rename playlist error:', err);
+  }
+}
+
+async function burnSelectedPlaylist() {
+  if (!selectedPlaylistId) return;
+  try {
+    const res = await fetch(`/api/playlists/${selectedPlaylistId}/burn`, { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Failed to load playlist');
+    }
+    const playlistTracks = await res.json();
+    // Replace local tracks with playlist tracks
+    localTracks = playlistTracks;
+    renderTracksTable();
+    // Switch to Master tab
+    tabMaster.click();
+  } catch (err) {
+    console.error('Burn playlist error:', err);
+    alert(err.message);
   }
 }
 

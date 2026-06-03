@@ -26,8 +26,9 @@ To set up everything on your home Linux server in under a minute, we have provid
   - **Tab 1: Master & Burn CD**
   - **Tab 2: Archive & Rip CD**
   - **Tab 3: Playlists**
-- **Spotify Search & Download**: Search Spotify directly from the web UI, browse results with album art, and download tracks as high-quality MP3s with one click — complete with a live progress modal showing yt-dlp download progress.
+- **Spotify Search & Download**: Search Spotify directly from the web UI, browse results with album art, and download tracks as high-quality MP3s with one click.
 - **Playlist Management**: Create named playlists, add/remove tracks from the burn queue, rename and delete playlists. Persisted to disk across server restarts.
+- **Burn Playlist to CD**: Load any playlist's tracks directly into the burn queue and switch to the Mastering tab with one click.
 - **Drag & Drop Upload**: Upload multiple audio files concurrently with a smooth, live-updating file progress bar.
 - **Interactive iTunes Playlist Queue**: Rearrange tracks dynamically using intuitive HTML5 drag-and-drop handles.
 - **Accurate Capacity Management**: Active length tracking with standard 74-minute and 80-minute tick markers. Warns in glowing red and disables burning if the total length exceeds the standard 80-minute Audio CD maximum.
@@ -107,7 +108,7 @@ newgrp cdrom
    ```bash
    npm start
    ```
-5. The server will launch on port **3000** (e.g., `http://localhost:3000` or `http://your-server-ip:3000`). Access it from any web browser on your home network!
+5. The server will launch on port **3123** (e.g., `http://localhost:3123` or `http://your-server-ip:3123`). Access it from any web browser on your home network!
 
 ---
 

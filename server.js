@@ -5,7 +5,7 @@ const fs = require('fs');
 const { spawn, exec, execSync } = require('child_process');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3123;
 
 // Setup directories
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
@@ -1381,6 +1381,22 @@ app.put('/api/playlists/:id/tracks/reorder', (req, res) => {
   playlist.updated = new Date().toISOString();
   savePlaylists();
   res.json(playlist);
+});
+
+// Load playlist tracks into the burn queue
+app.post('/api/playlists/:id/burn', (req, res) => {
+  const playlist = playlists.find(p => p.id === req.params.id);
+  if (!playlist) return res.status(404).json({ error: 'Playlist not found.' });
+
+  const playlistTracks = playlist.trackIds
+    .map(tid => tracks.find(t => t.id === tid))
+    .filter(Boolean);
+
+  if (playlistTracks.length === 0) {
+    return res.status(400).json({ error: 'Playlist is empty.' });
+  }
+
+  res.json(playlistTracks);
 });
 
 // Serve frontend page fallback
