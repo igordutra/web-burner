@@ -49,6 +49,28 @@ const searchError = document.getElementById('search-error');
 const searchSpinner = document.getElementById('search-spinner');
 let isDownloading = false;
 
+// DOM Elements - Navigation & Archiving
+const tabMaster = document.getElementById('tab-master');
+const tabRip = document.getElementById('tab-rip');
+const masterView = document.getElementById('master-view');
+const ripView = document.getElementById('rip-view');
+
+const refreshCDBtn = document.getElementById('refresh-cd-btn');
+const ripAlbumInput = document.getElementById('rip-album-input');
+const ripArtistInput = document.getElementById('rip-artist-input');
+const ripTracksTbody = document.getElementById('rip-tracks-tbody');
+
+const laserLensCD = document.getElementById('laser-lens-cd');
+const ripDriveTitle = document.getElementById('rip-drive-title');
+const ripDriveSubtitle = document.getElementById('rip-drive-subtitle');
+
+const ripDriveSelect = document.getElementById('rip-drive-select');
+const ripFormatSelect = document.getElementById('rip-format-select');
+const ripBtn = document.getElementById('rip-btn');
+
+const ripProgressDialog = document.getElementById('rip-progress-dialog');
+const closeRipDialogBtn = document.getElementById('close-rip-dialog-btn');
+
 // Playlist State
 let playlists = [];
 let selectedPlaylistId = null;
