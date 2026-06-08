@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
@@ -209,15 +211,19 @@ function extractMetadata(filePath, originalFilename) {
 
 // CD drive detector
 function detectDrives() {
+  const seen = new Set();
   const drives = [];
-  drives.push({ name: 'Mock Burner (Dev Simulator)', device: 'mock' });
 
   if (process.platform === 'linux') {
-    const commonPaths = ['/dev/cdrom', '/dev/sr0', '/dev/sg0'];
+    const commonPaths = ['/dev/sr0', '/dev/sr1', '/dev/cdrom', '/dev/cdrom1'];
     commonPaths.forEach(devPath => {
-      if (fs.existsSync(devPath)) {
-        drives.push({ name: `Physical Drive (${devPath})`, device: devPath });
-      }
+      if (!fs.existsSync(devPath)) return;
+      try {
+        const real = fs.realpathSync(devPath);
+        if (seen.has(real)) return;
+        seen.add(real);
+        drives.push({ name: `CD/DVD Writer (${path.basename(real)})`, device: real });
+      } catch (e) {}
     });
   } else if (process.platform === 'darwin') {
     try {
@@ -227,12 +233,17 @@ function detectDrives() {
         if (idx > 0 && line.trim()) {
           const parts = line.trim().split(/\s{2,}/);
           if (parts[0] && parts[1]) {
-            drives.push({ name: `Apple Burner: ${parts[1]}`, device: parts[0] });
+            const device = parts[0];
+            if (seen.has(device)) return;
+            seen.add(device);
+            drives.push({ name: `Apple Burner: ${parts[1]}`, device });
           }
         }
       });
     } catch (e) {}
   }
+
+  drives.unshift({ name: 'Mock Burner (Dev Simulator)', device: 'mock' });
 
   return drives;
 }
