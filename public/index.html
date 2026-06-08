@@ -220,13 +220,17 @@
 
               <div class="form-group checkbox-group">
                 <label class="checkbox-container">
-                  <input type="checkbox" id="simulate-checkbox" checked>
+                  <input type="checkbox" id="simulate-checkbox">
                   <span class="checkmark"></span>
                   <span class="label-text">
-                    Simulation Mode (Dummy Burn)
-                    <span class="label-help">Spins the disc and fires lasers in test mode without modifying physical media. Highly recommended to verify track structures!</span>
+                    Simulation Mode (Dummy Burn — No Data Written)
+                    <span class="label-help">Tests the burning process without actually writing to the disc. Use this to verify your track list, then uncheck for a real burn.</span>
                   </span>
                 </label>
+              </div>
+
+              <div id="simulate-warning" class="simulate-warning" style="display:none">
+                ⚠️ Simulation Mode — the laser will NOT write. Uncheck for a real burn.
               </div>
 
               <button id="burn-btn" class="btn btn-primary btn-block btn-burn" disabled>

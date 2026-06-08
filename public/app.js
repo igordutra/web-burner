@@ -121,6 +121,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // Burn button action
   burnBtn.addEventListener('click', startBurnProcess);
 
+  // Toggle simulation warning
+  const simulateWarning = document.getElementById('simulate-warning');
+  simulateCheckbox.addEventListener('change', () => {
+    simulateWarning.style.display = simulateCheckbox.checked ? 'block' : 'none';
+  });
+
   // Close dialog action
   closeDialogBtn.addEventListener('click', () => {
     progressDialog.close();

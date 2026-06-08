@@ -1113,6 +1113,19 @@ select:focus {
   line-height: 1.4;
 }
 
+/* Simulation Mode Warning */
+.simulate-warning {
+  color: var(--state-warning);
+  font-size: 0.8rem;
+  text-align: center;
+  padding: 8px 12px;
+  margin: 8px 0;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+}
+
 /* Glowing Master Burning Pulsing Effect */
 .btn-burn:not(:disabled) {
   animation: pulseButton 2s infinite;

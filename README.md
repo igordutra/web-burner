@@ -126,6 +126,44 @@ MOCK_BURN=true npm start
 
 ---
 
+## Track Persistence
+
+Track metadata is persisted to `tracks.json` in the project root, surviving server restarts. On startup, the server:
+1. Loads any previously saved tracks from `tracks.json`
+2. Scans the `uploads/` directory for orphaned audio files not yet tracked
+3. Extracts their metadata (title, artist, album, duration) using `ffprobe`
+4. Saves the updated track list back to `tracks.json`
+
+Playlists (`playlists.json`) reference tracks by ID and are reconciled on load — tracks whose source files no longer exist on disk are removed from playlists automatically.
+
+---
+
+## Burning Troubleshooting
+
+### Simulation Mode
+Simulation Mode (Dummy Burn) is **off by default**. When enabled, it passes the `-dummy` flag to `wodim`, which spins the disc and simulates writing but never activates the laser. Use it to verify your track list before a real burn.
+
+### Media Write Errors
+If you see errors like:
+```
+Sense Key: 0x3 Medium Error
+Sense Code: 0x0C Qual 0x00 (write error)
+```
+This is a **hardware write error** — the CD-R disc is incompatible with the drive, dirty, or damaged. Try:
+- A different brand of CD-R (Verbatim, Sony are well-supported)
+- Cleaning the drive laser with a lens cleaning disc
+- A slower write speed (8x is the most compatible)
+
+The disc remains blank and reusable after a write error (no data was committed).
+
+### WAV Alignment (‑pad)
+All audio tracks are padded with silence to a multiple of 2352 bytes (one CD-DA sector) using `wodim`'s `-pad` flag, ensuring compatibility with the CD specification.
+
+### DMA Speed Test
+The `CDR_NODMATEST` environment variable is set automatically to skip `wodim`'s slow DMA speed test on startup.
+
+---
+
 ## Spotify Integration
 
 The Spotify search & download feature uses two components:

@@ -27,5 +27,6 @@ Thumbs.db
 
 # Runtime data persisted to disk
 playlists.json
+tracks.json
 burn_temp/
 rip_temp/

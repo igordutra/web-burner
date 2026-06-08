@@ -87,8 +87,13 @@ function broadcastStatus(logLine = null) {
     error: activeBurnJob.error
   });
 
-  sseClients.forEach(client => {
-    client.write(`event: progress\ndata: ${data}\n\n`);
+  sseClients = sseClients.filter(client => {
+    try {
+      client.write(`event: progress\ndata: ${data}\n\n`);
+      return true;
+    } catch (e) {
+      return false;
+    }
   });
 }
 
@@ -107,8 +112,13 @@ function broadcastRipStatus(logLine = null) {
     error: activeRipJob.error
   });
 
-  sseRipClients.forEach(client => {
-    client.write(`event: progress\ndata: ${data}\n\n`);
+  sseRipClients = sseRipClients.filter(client => {
+    try {
+      client.write(`event: progress\ndata: ${data}\n\n`);
+      return true;
+    } catch (e) {
+      return false;
+    }
   });
 }
 
@@ -215,8 +225,12 @@ function detectDrives() {
   const drives = [];
 
   if (process.platform === 'linux') {
-    const commonPaths = ['/dev/sr0', '/dev/sr1', '/dev/cdrom', '/dev/cdrom1'];
-    commonPaths.forEach(devPath => {
+    const devPaths = ['/dev/cdrom', '/dev/cdrom1'];
+    try {
+      const srDevices = fs.readdirSync('/dev').filter(f => /^sr\d+$/.test(f)).map(f => `/dev/${f}`);
+      devPaths.unshift(...srDevices);
+    } catch (e) {}
+    devPaths.forEach(devPath => {
       if (!fs.existsSync(devPath)) return;
       try {
         const real = fs.realpathSync(devPath);
@@ -276,8 +290,9 @@ function runMockBurn(simulateSpeed, isDummy) {
     activeBurnJob.error = null;
     activeBurnJob.logs = [];
 
-    broadcastStatus('>>> Initialising silky-bohr-burner (MOCK SESSION) <<<');
+    broadcastStatus('>>> Initialising silky-bohr-burner (MOCK/SIMULATED SESSION) <<<');
     broadcastStatus(`Target Device: mock | Write Speed: ${simulateSpeed}x | Dummy Mode: ${isDummy}`);
+    broadcastStatus('⚠️  THIS IS A SIMULATED BURN — no physical CD burner is being used. No disc will be written.');
     broadcastStatus('Validating disc storage capacities...');
 
     let trackIdx = 0;
@@ -378,8 +393,11 @@ async function runRealBurn(device, speed, isDummy) {
   activeBurnJob.error = null;
   activeBurnJob.logs = [];
 
-  broadcastStatus('>>> Initialising silky-bohr-burner (REAL SESSION) <<<');
+  broadcastStatus('>>> Initialising silky-bohr-burner (REAL BURN SESSION) <<<');
   broadcastStatus(`Target Device: ${device} | Write Speed: ${speed}x | Dummy Mode: ${isDummy}`);
+  if (isDummy) {
+    broadcastStatus('⚠️  SIMULATION MODE — the laser will NOT write. Uncheck "Simulation Mode" in the UI for a real burn.');
+  }
 
   cleanupBurnTemp();
 
@@ -403,6 +421,7 @@ async function runRealBurn(device, speed, isDummy) {
     await new Promise((resolve, reject) => {
       let ffmpegLog = '';
       ffmpegProc.stderr.on('data', (chunk) => ffmpegLog += chunk.toString());
+      ffmpegProc.on('error', reject);
       ffmpegProc.on('close', (code) => {
         if (code === 0) {
           broadcastStatus(`ffmpeg: Converted track [${trackNumber}] successfully.`);
@@ -418,6 +437,14 @@ async function runRealBurn(device, speed, isDummy) {
   activeBurnJob.progress = 45;
   activeBurnJob.currentStep = 'Writing optical media...';
   broadcastStatus('Preparing wodim command and files...');
+
+  if (isDummy) {
+    broadcastStatus('⚠️  SIMULATION MODE ENABLED — laser writing is DISABLED. No data will be burned to the disc.');
+  }
+
+  if (!fs.existsSync(device)) {
+    throw new Error(`CD/DVD burner device "${device}" not found. Check that the drive is connected and powered on.`);
+  }
 
   const wavFiles = fs.readdirSync(BURN_TEMP_DIR)
     .filter(f => f.endsWith('.wav'))
@@ -440,13 +467,24 @@ async function runRealBurn(device, speed, isDummy) {
     }
   }
 
-  const args = ['-v', '-audio', `speed=${speed}`, `dev=${device}`];
+  // Clamp speed to drive's max supported CD write speed (24x for this drive)
+  const clampedSpeed = Math.min(speed, 24);
+
+  const args = ['-v', '-audio', '-tao', '-pad', `speed=${clampedSpeed}`, `dev=${device}`];
   if (isDummy) args.push('-dummy');
   args.push(...wavFiles);
 
   broadcastStatus(`Executing: ${burnTool} ${args.join(' ')}`);
 
-  const burnProc = spawn(burnTool, args);
+  // Check that media is present using wodim -atip (only returns ATIP for blank CD-R)
+  try {
+    execSync(`${burnTool} dev=${device} -atip 2>&1`, { timeout: 8000 });
+  } catch (mediaErr) {
+    throw new Error(`No blank CD-R detected in drive ${device}. Please insert a blank CD-R and try again.`);
+  }
+
+  const env = { ...process.env, CDR_NODMATEST: '1' };
+  const burnProc = spawn(burnTool, args, { env });
 
   burnProc.stdout.on('data', (data) => {
     const lines = data.toString().split('\n');
@@ -471,18 +509,45 @@ async function runRealBurn(device, speed, isDummy) {
     });
   });
 
+  let stderrLog = '';
   burnProc.stderr.on('data', (data) => {
-    const lines = data.toString().split('\n');
+    const chunk = data.toString();
+    stderrLog += chunk;
+    const lines = chunk.split('\n');
     lines.forEach(line => {
       if (line.trim()) broadcastStatus(`${burnTool} [err]: ${line}`);
     });
   });
 
   await new Promise((resolve, reject) => {
+    burnProc.on('error', reject);
     burnProc.on('close', (code) => {
       cleanupBurnTemp();
 
       if (code === 0) {
+        activeBurnJob.progress = 95;
+        activeBurnJob.currentStep = 'Verifying burned disc...';
+        broadcastStatus('=============================================');
+        broadcastStatus('   CD BURNED — RUNNING VERIFICATION...   ');
+        broadcastStatus('=============================================');
+
+        if (!isDummy) {
+          try {
+            broadcastStatus('Reading disc Table of Contents to verify write...');
+            const tocOutput = execSync(`${burnTool} dev=${device} -toc 2>&1`, { timeout: 15000 });
+            const toc = tocOutput.toString();
+            const trackLines = toc.split('\n').filter(l => /track.*\d+/i.test(l));
+            broadcastStatus(`  Found ${trackLines.length} track(s) on disc:`);
+            trackLines.forEach(l => broadcastStatus(`  ${l.trim()}`));
+            broadcastStatus('✅  VERIFICATION PASSED — Audio data confirmed on disc.');
+          } catch (verifyErr) {
+            broadcastStatus(`⚠️  VERIFICATION WARNING: Could not verify TOC: ${verifyErr.message}`);
+            broadcastStatus('  The burn reported success but verification failed. The disc may still be usable.');
+          }
+        } else {
+          broadcastStatus('⚠️  Simulation mode — verification skipped (no data was written).');
+        }
+
         activeBurnJob.progress = 100;
         activeBurnJob.status = 'success';
         activeBurnJob.currentStep = 'Finished!';
@@ -498,7 +563,13 @@ async function runRealBurn(device, speed, isDummy) {
 
         resolve();
       } else {
-        reject(new Error(`${burnTool} execution failed with exit code ${code}`));
+        let errMsg = `${burnTool} execution failed with exit code ${code}.`;
+        if (stderrLog.includes('write error') || stderrLog.includes('Medium Error')) {
+          errMsg += ' The drive reported a write error — the CD-R may be dirty, damaged, or incompatible. Please try a different brand of CD-R (e.g. Verbatim, Sony) and ensure the disc is clean.';
+        } else if (stderrLog.includes('Cannot load media')) {
+          errMsg += ' No disc detected — please insert a blank CD-R into the drive.';
+        }
+        reject(new Error(errMsg));
       }
     });
   });
@@ -627,6 +698,7 @@ function runMockRip(format, album, artist, ripTracks) {
           };
           
           tracks.push(newTrack);
+          saveTracks();
           broadcastRipStatus(`ffmpeg: Compressing complete. Track [${trackNumber}] saved as uploads/${filename}`);
           
           // Increment progress slightly (80% to 95% scale)
@@ -760,6 +832,7 @@ async function runRealRip(device, format, album, artist, ripTracks) {
           };
           
           tracks.push(newTrack);
+          saveTracks();
           broadcastRipStatus(`ffmpeg: Transcoding complete for Track [${trackNumber}]. Added to Mastering playlist.`);
           resolve();
         } else {
@@ -819,6 +892,7 @@ app.post('/api/upload', upload.array('files'), async (req, res) => {
       };
 
       tracks.push(track);
+      saveTracks();
       addedTracks.push(track);
     }
 
@@ -847,6 +921,7 @@ app.post('/api/reorder', (req, res) => {
   });
 
   tracks = reordered;
+  saveTracks();
   res.json(tracks);
 });
 
@@ -868,6 +943,7 @@ app.delete('/api/tracks/:id', (req, res) => {
   } catch (err) {}
 
   tracks.splice(idx, 1);
+  saveTracks();
   res.json({ success: true, message: 'Track deleted successfully.' });
 });
 
@@ -1192,6 +1268,7 @@ app.post('/api/download', async (req, res) => {
       mimeType: 'audio/mpeg'
     };
     tracks.push(track);
+    saveTracks();
     return res.status(201).json({ track, cached: true });
   }
 
@@ -1237,6 +1314,7 @@ app.post('/api/download', async (req, res) => {
             mimeType: 'audio/mpeg'
           };
           tracks.push(entry);
+          saveTracks();
           resolve(entry);
         } catch (err) {
           reject(new Error(`Failed to process downloaded file: ${err.message}`));
@@ -1258,6 +1336,7 @@ app.post('/api/download', async (req, res) => {
    ======================================= */
 
 const PLAYLISTS_FILE = path.join(__dirname, 'playlists.json');
+const TRACKS_FILE = path.join(__dirname, 'tracks.json');
 
 let playlists = [];
 
@@ -1279,7 +1358,59 @@ function savePlaylists() {
   }
 }
 
+function loadTracks() {
+  try {
+    if (fs.existsSync(TRACKS_FILE)) {
+      tracks = JSON.parse(fs.readFileSync(TRACKS_FILE, 'utf8'));
+      tracks = tracks.filter(t => fs.existsSync(t.path));
+    }
+  } catch (err) {
+    console.error('Failed to load tracks:', err.message);
+  }
+}
+
+async function recoverOrphanedTracks() {
+  try {
+    const onDisk = new Set(tracks.map(t => path.resolve(t.path)));
+    const files = fs.readdirSync(UPLOADS_DIR).filter(f => /\.(mp3|wav|flac|m4a|ogg|aac|wma|aiff)$/i.test(f));
+    let added = 0;
+    for (const file of files) {
+      const filePath = path.resolve(UPLOADS_DIR, file);
+      if (onDisk.has(filePath)) continue;
+      const meta = await extractMetadata(filePath, file);
+      const track = {
+        id: `track-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        filename: file,
+        path: filePath,
+        title: meta.title,
+        artist: meta.artist,
+        album: meta.album,
+        duration: meta.duration,
+        size: fs.statSync(filePath).size,
+        mimeType: `audio/${path.extname(file).slice(1)}`
+      };
+      tracks.push(track);
+      added++;
+    }
+    if (added > 0) {
+      console.log(`Recovered ${added} orphaned audio file(s) from uploads/`);
+      saveTracks();
+    }
+  } catch (err) {
+    console.error('Failed to recover orphaned tracks:', err.message);
+  }
+}
+
+function saveTracks() {
+  try {
+    fs.writeFileSync(TRACKS_FILE, JSON.stringify(tracks, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Failed to save tracks:', err.message);
+  }
+}
+
 loadPlaylists();
+loadTracks();
 
 // List all playlists
 app.get('/api/playlists', (req, res) => {
@@ -1421,4 +1552,23 @@ app.listen(PORT, () => {
   console.log(` silky-bohr-burner server listening on port ${PORT}`);
   console.log(` Local Network Address: http://localhost:${PORT}`);
   console.log(`===================================================`);
+
+  // Async recovery of orphaned tracks with real metadata
+  recoverOrphanedTracks().then(() => {
+    console.log(`Track recovery complete: ${tracks.length} audio files loaded.`);
+    // Remap any playlist IDs that reference tracks now recovered
+    playlists.forEach(playlist => {
+      const remapped = playlist.trackIds.map(tid => {
+        if (tracks.some(t => t.id === tid)) return tid;
+        return null;
+      }).filter(Boolean);
+      if (remapped.length !== playlist.trackIds.length) {
+        playlist.trackIds = remapped;
+        console.log(`Playlist "${playlist.name}": ${playlist.trackIds.length} track(s) available.`);
+      }
+    });
+    savePlaylists();
+  }).catch(err => {
+    console.error('Track recovery failed:', err.message);
+  });
 });
