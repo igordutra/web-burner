@@ -88,7 +88,7 @@ if [ "$SUDO_READY" = false ]; then
     echo -e "${YELLOW}Sudo is not available in the current non-interactive context.${NC}"
     echo -e "You can still complete deployment by running these steps manually:"
     echo -e ""
-    echo -e "  ${CYAN}1. sudo apt-get install -y wodim cdparanoia${NC}"
+    echo -e "  ${CYAN}1. sudo apt-get install -y cdrskin xorriso cdparanoia${NC}"
     echo -e "  ${CYAN}2. npm install${NC}"
     echo -e "  ${CYAN}3. npm start${NC}"
     echo -e ""
@@ -121,8 +121,8 @@ if [ "$APT_AVAILABLE" = true ]; then
     NEEDED=""
     MISSING=false
 
-    if ! command -v wodim &>/dev/null && ! command -v cdrecord &>/dev/null; then
-        NEEDED="$NEEDED wodim"
+    if ! command -v cdrskin &>/dev/null; then
+        NEEDED="$NEEDED cdrskin xorriso"
         MISSING=true
     fi
 
@@ -162,7 +162,7 @@ if [ "$APT_AVAILABLE" = true ]; then
 else
     echo -e "${YELLOW}Skipping system package installation (apt-get not available or no sudo access).${NC}"
     echo -e "Please ensure the following are installed manually:"
-    echo -e "  - wodim (or cdrecord)  — ${CYAN}sudo apt-get install -y wodim${NC}"
+    echo -e "  - cdrskin (or xorriso) — ${CYAN}sudo apt-get install -y cdrskin xorriso${NC}"
     echo -e "  - cdparanoia           — ${CYAN}sudo apt-get install -y cdparanoia${NC}"
 fi
 

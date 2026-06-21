@@ -126,7 +126,7 @@ function broadcastRipStatus(logLine = null) {
 function getSystemCapabilities() {
   let hasFFmpeg = false;
   let hasFFprobe = false;
-  let hasWodim = false;
+  let hasCdrskin = false;
   let hasCdparanoia = false;
 
   try {
@@ -140,8 +140,8 @@ function getSystemCapabilities() {
   } catch (e) {}
 
   try {
-    execSync('which wodim || which cdrecord');
-    hasWodim = true;
+    execSync('which cdrskin');
+    hasCdrskin = true;
   } catch (e) {}
 
   try {
@@ -149,7 +149,7 @@ function getSystemCapabilities() {
     hasCdparanoia = true;
   } catch (e) {}
 
-  return { hasFFmpeg, hasFFprobe, hasWodim, hasCdparanoia };
+  return { hasFFmpeg, hasFFprobe, hasCdrskin, hasCdparanoia };
 }
 
 // Wrapper for extracting audio metadata using ffprobe
@@ -319,17 +319,17 @@ function runMockBurn(simulateSpeed, isDummy) {
       activeBurnJob.progress = 40;
       activeBurnJob.currentStep = 'Writing optical media...';
       
-      broadcastStatus('Launching burning engine backend (mocked wodim)...');
-      broadcastStatus('wodim: Device seems to be: Generic CD-RW drive');
+      broadcastStatus('Launching burning engine backend (mocked cdrskin)...');
+      broadcastStatus('cdrskin: Device seems to be: Generic CD-RW drive');
       
       if (isDummy) {
-        broadcastStatus('wodim: Dummy write enabled. No actual physical lasers will fire!');
+        broadcastStatus('cdrskin: Dummy write enabled. No actual physical lasers will fire!');
       }
 
-      broadcastStatus('wodim: Sending Packing Command...');
-      broadcastStatus('wodim: TOC Type: 1 = CD-DA (Audio CD Layout)');
-      broadcastStatus(`wodim: Burning speed selected is ${simulateSpeed}x.`);
-      broadcastStatus(`wodim: Total tracks to burn: ${tracks.length}`);
+      broadcastStatus('cdrskin: Sending Packing Command...');
+      broadcastStatus('cdrskin: TOC Type: 1 = CD-DA (Audio CD Layout)');
+      broadcastStatus(`cdrskin: Burning speed selected is ${simulateSpeed}x.`);
+      broadcastStatus(`cdrskin: Total tracks to burn: ${tracks.length}`);
       
       let burnIdx = 0;
 
@@ -347,13 +347,13 @@ function runMockBurn(simulateSpeed, isDummy) {
               activeBurnJob.progress = overallProgress;
               
               if (trackProgress % 20 === 0) {
-                broadcastStatus(`wodim: Track ${trackNumber}: Writing chunk (${trackProgress}%) at speed ${simulateSpeed}x`);
+                broadcastStatus(`cdrskin: Track ${trackNumber}: Writing chunk (${trackProgress}%) at speed ${simulateSpeed}x`);
               }
               
               trackProgress += 20;
               setTimeout(writeChunk, 250);
             } else {
-              broadcastStatus(`wodim: Track ${trackNumber} [${track.title}] completed successfully.`);
+              broadcastStatus(`cdrskin: Track ${trackNumber} [${track.title}] completed successfully.`);
               burnIdx++;
               setTimeout(burnNext, 400);
             }
@@ -363,14 +363,14 @@ function runMockBurn(simulateSpeed, isDummy) {
         } else {
           activeBurnJob.currentStep = 'Flushing drive buffers and finalizing disc...';
           activeBurnJob.progress = 95;
-          broadcastStatus('wodim: Writing Lead-Out/TOC to disc...');
+          broadcastStatus('cdrskin: Writing Lead-Out/TOC to disc...');
           
           setTimeout(() => {
             activeBurnJob.progress = 100;
             activeBurnJob.status = 'success';
             activeBurnJob.currentStep = 'Finished!';
-            broadcastStatus('wodim: Flushing cache. Drive buffers cleared.');
-            broadcastStatus('wodim: Ejecting physical drive tray... Clack! Open.');
+            broadcastStatus('cdrskin: Flushing cache. Drive buffers cleared.');
+            broadcastStatus('cdrskin: Ejecting physical drive tray... Clack! Open.');
             broadcastStatus('=============================================');
             broadcastStatus('   CD BURN OPERATION COMPLETED SUCCESSFULLY   ');
             broadcastStatus('=============================================');
@@ -436,7 +436,7 @@ async function runRealBurn(device, speed, isDummy) {
   activeBurnJob.status = 'burning';
   activeBurnJob.progress = 45;
   activeBurnJob.currentStep = 'Writing optical media...';
-  broadcastStatus('Preparing wodim command and files...');
+  broadcastStatus('Preparing cdrskin command and files...');
 
   if (isDummy) {
     broadcastStatus('⚠️  SIMULATION MODE ENABLED — laser writing is DISABLED. No data will be burned to the disc.');
@@ -455,28 +455,28 @@ async function runRealBurn(device, speed, isDummy) {
     throw new Error('No audio tracks were successfully converted.');
   }
 
-  let burnTool = 'wodim';
+  let burnTool = 'cdrskin';
   try {
-    execSync('which wodim');
+    execSync('which cdrskin');
   } catch (e) {
     try {
-      execSync('which cdrecord');
-      burnTool = 'cdrecord';
+      execSync('which xorriso');
+      burnTool = 'xorriso';
     } catch (err) {
-      throw new Error('Neither "wodim" nor "cdrecord" CD burning utilities were found on your server.');
+      throw new Error('Neither "cdrskin" nor "xorriso" CD burning utilities were found on your server.');
     }
   }
 
-  // Clamp speed to drive's max supported CD write speed (24x for this drive)
-  const clampedSpeed = Math.min(speed, 24);
+  // Clamp speed to reliable range for audio CD burning
+  const clampedSpeed = Math.min(Math.max(speed, 4), 12);
 
-  const args = ['-v', '-audio', '-tao', '-pad', `speed=${clampedSpeed}`, `dev=${device}`];
+  const args = ['-v', '-audio', '-sao', '-pad', '-force', `speed=${clampedSpeed}`, `dev=${device}`, 'fs=64m'];
   if (isDummy) args.push('-dummy');
   args.push(...wavFiles);
 
   broadcastStatus(`Executing: ${burnTool} ${args.join(' ')}`);
 
-  // Check that media is present using wodim -atip (only returns ATIP for blank CD-R)
+  // Check that media is present using cdrskin -atip (only returns ATIP for blank CD-R)
   try {
     execSync(`${burnTool} dev=${device} -atip 2>&1`, { timeout: 8000 });
   } catch (mediaErr) {
@@ -970,15 +970,15 @@ app.post('/api/burn', async (req, res) => {
   }
 
   const caps = getSystemCapabilities();
-  const forceMock = device === 'mock' || !caps.hasFFmpeg || !caps.hasWodim || process.env.MOCK_BURN === 'true';
+  const forceMock = device === 'mock' || !caps.hasFFmpeg || !caps.hasCdrskin || process.env.MOCK_BURN === 'true';
 
   res.json({ success: true, message: 'Burning process initiated.' });
 
   try {
     if (forceMock) {
-      await runMockBurn(speed || 16, simulate || false);
+      await runMockBurn(speed || 8, simulate || false);
     } else {
-      await runRealBurn(device, speed || 16, simulate || false);
+      await runRealBurn(device, speed || 8, simulate || false);
     }
   } catch (err) {
     activeBurnJob.status = 'failed';
