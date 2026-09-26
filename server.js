@@ -486,7 +486,8 @@ async function runRealBurn(device, speed, isDummy) {
   const clampedSpeed = Math.min(Math.max(speed, 10), 24);
 
   // Use TAO (Track-At-Once) with -pad. SAO mode causes SCSI write(-150) pre-gap errors on slim/Hitachi-LG drives.
-  const args = [`dev=${device}`, `speed=${clampedSpeed}`, 'fs=16m', '-v', '-tao', '-pad'];
+  // -force disables cdrskin's false session size check which compares 2352-byte audio sectors against 2048-byte limits.
+  const args = [`dev=${device}`, `speed=${clampedSpeed}`, 'fs=16m', '-v', '-tao', '-pad', '-force'];
   if (isDummy) args.push('-dummy');
   args.push('-audio', ...wavFiles);
 
