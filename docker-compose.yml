@@ -5,6 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: web-burner
     restart: unless-stopped
+    privileged: true
     ports:
       - "3123:3123"
     environment:

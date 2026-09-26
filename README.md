@@ -153,6 +153,7 @@ Because the container needs to communicate with physical optical hardware for CD
    docker run -d \
      --name web-burner \
      --restart unless-stopped \
+     --privileged \
      -p 3123:3123 \
      --device=/dev/sr0:/dev/sr0 \
      --group-add cdrom \
