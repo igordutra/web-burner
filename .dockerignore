@@ -1,0 +1,12 @@
+node_modules/
+npm-debug.log
+.git/
+.gitignore
+.env
+burn_temp/
+rip_temp/
+uploads/
+*.log
+.DS_Store
+.DS_Store?
+._*

@@ -112,6 +112,61 @@ newgrp cdrom
 
 ---
 
+## 🐳 Running with Docker (Node 24)
+
+You can run silky-bohr-burner fully containerised using Docker and Docker Compose with the official Node 24 runtime (`node:24-bookworm-slim`).
+
+Because the container needs to communicate with physical optical hardware for CD burning and ripping, the host's optical drive device (`/dev/sr0`) and the `cdrom` group are passed through directly to the container.
+
+### Option A: Using Docker Compose (Recommended)
+
+1. Ensure your `.env` file contains your optional Spotify credentials if you plan to use Spotify search and download:
+   ```bash
+   SPOTIFY_CLIENT_ID=your_client_id
+   SPOTIFY_CLIENT_SECRET=your_client_secret
+   ```
+
+2. Start the container in the background:
+   ```bash
+   docker compose up -d --build
+   ```
+
+3. View live container logs:
+   ```bash
+   docker compose logs -f
+   ```
+
+4. Stop the container:
+   ```bash
+   docker compose down
+   ```
+
+### Option B: Using Plain Docker CLI
+
+1. Build the image:
+   ```bash
+   docker build -t web-burner .
+   ```
+
+2. Run the container:
+   ```bash
+   docker run -d \
+     --name web-burner \
+     --restart unless-stopped \
+     -p 3123:3123 \
+     --device=/dev/sr0:/dev/sr0 \
+     --group-add cdrom \
+     -v $(pwd)/uploads:/app/uploads \
+     -v $(pwd)/playlists.json:/app/playlists.json \
+     -v $(pwd)/tracks.json:/app/tracks.json \
+     --env-file .env \
+     web-burner
+   ```
+
+The dashboard will be available at `http://<your-server-ip>:3123`.
+
+---
+
 ## Configuration & Mocking
 
 The application will **automatically** determine its capabilities on startup:

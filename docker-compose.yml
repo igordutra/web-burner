@@ -1,0 +1,25 @@
+services:
+  web-burner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: web-burner
+    restart: unless-stopped
+    ports:
+      - "3123:3123"
+    environment:
+      - PORT=3123
+      - NODE_ENV=production
+      # Spotify credentials (optional, loaded from .env if present)
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID:-}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET:-}
+    # Pass host optical drive to the container
+    devices:
+      - /dev/sr0:/dev/sr0
+    # Add container user to host cdrom group for drive write permissions
+    group_add:
+      - cdrom
+    volumes:
+      - ./uploads:/app/uploads
+      - ./playlists.json:/app/playlists.json
+      - ./tracks.json:/app/tracks.json
