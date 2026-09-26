@@ -75,6 +75,7 @@ let sseRipClients = [];
 // Broadcast burning status
 function broadcastStatus(logLine = null) {
   if (logLine) {
+    console.log(logLine);
     activeBurnJob.logs.push(logLine);
     if (activeBurnJob.logs.length > 500) activeBurnJob.logs.shift();
   }
@@ -100,6 +101,7 @@ function broadcastStatus(logLine = null) {
 // Broadcast ripping status
 function broadcastRipStatus(logLine = null) {
   if (logLine) {
+    console.log(logLine);
     activeRipJob.logs.push(logLine);
     if (activeRipJob.logs.length > 500) activeRipJob.logs.shift();
   }
@@ -467,12 +469,13 @@ async function runRealBurn(device, speed, isDummy) {
     }
   }
 
-  // Clamp speed to reliable range for audio CD burning
-  const clampedSpeed = Math.min(Math.max(speed, 4), 12);
+  // Clamp speed to drive and media supported range (Hitachi-LG GUB0N + Verbatim is 10x - 24x)
+  const clampedSpeed = Math.min(Math.max(speed, 10), 24);
 
-  const args = ['-v', '-audio', '-sao', '-pad', '-force', `speed=${clampedSpeed}`, `dev=${device}`, 'fs=64m'];
+  // Use TAO (Track-At-Once) with -pad. SAO mode causes SCSI write(-150) pre-gap errors on slim/Hitachi-LG drives.
+  const args = [`dev=${device}`, `speed=${clampedSpeed}`, 'fs=16m', '-v', '-tao', '-pad'];
   if (isDummy) args.push('-dummy');
-  args.push(...wavFiles);
+  args.push('-audio', ...wavFiles);
 
   broadcastStatus(`Executing: ${burnTool} ${args.join(' ')}`);
 
@@ -565,9 +568,15 @@ async function runRealBurn(device, speed, isDummy) {
       } else {
         let errMsg = `${burnTool} execution failed with exit code ${code}.`;
         if (stderrLog.includes('write error') || stderrLog.includes('Medium Error')) {
-          errMsg += ' The drive reported a write error — the CD-R may be dirty, damaged, or incompatible. Please try a different brand of CD-R (e.g. Verbatim, Sony) and ensure the disc is clean.';
+          errMsg += ' The drive reported a write error — the CD-R may be dirty, damaged, or incompatible.';
         } else if (stderrLog.includes('Cannot load media')) {
           errMsg += ' No disc detected — please insert a blank CD-R into the drive.';
+        }
+        if (stderrLog) {
+          const fatalLine = stderrLog.split('\n').filter(l => l.includes('FATAL') || l.includes('error') || l.includes('SORRY')).pop();
+          if (fatalLine) {
+            errMsg += ` [${fatalLine.trim()}]`;
+          }
         }
         reject(new Error(errMsg));
       }
@@ -976,9 +985,9 @@ app.post('/api/burn', async (req, res) => {
 
   try {
     if (forceMock) {
-      await runMockBurn(speed || 8, simulate || false);
+      await runMockBurn(speed || 16, simulate || false);
     } else {
-      await runRealBurn(device, speed || 8, simulate || false);
+      await runRealBurn(device, speed || 16, simulate || false);
     }
   } catch (err) {
     activeBurnJob.status = 'failed';
