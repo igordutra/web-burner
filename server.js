@@ -457,6 +457,19 @@ async function runRealBurn(device, speed, isDummy) {
     throw new Error('No audio tracks were successfully converted.');
   }
 
+  // Validate total audio size against standard 80-minute CD-R capacity (359,844 sectors = 79m 57s)
+  let totalAudioBytes = 0;
+  wavFiles.forEach(f => {
+    totalAudioBytes += Math.max(0, fs.statSync(f).size - 44);
+  });
+  const totalSectors = Math.ceil(totalAudioBytes / 2352);
+  const maxSectors = 359844;
+  if (totalSectors > maxSectors) {
+    const totalMinutes = Math.floor(totalSectors / 75 / 60);
+    const totalSecs = Math.round((totalSectors / 75) % 60);
+    throw new Error(`Total audio duration (${totalMinutes}m ${totalSecs}s) exceeds physical CD-R capacity (79m 57s). Please remove 1 or 2 tracks from your queue and try again.`);
+  }
+
   let burnTool = 'cdrskin';
   try {
     execSync('which cdrskin');
@@ -1272,7 +1285,7 @@ app.post('/api/download', async (req, res) => {
       title: title || meta.title,
       artist: artist || meta.artist,
       album: album || meta.album,
-      duration: duration || meta.duration,
+      duration: meta.duration || duration,
       size: fs.statSync(outputPath).size,
       mimeType: 'audio/mpeg'
     };
@@ -1318,7 +1331,7 @@ app.post('/api/download', async (req, res) => {
             title: title || meta.title,
             artist: artist || meta.artist,
             album: album || meta.album,
-            duration: duration || meta.duration,
+            duration: meta.duration || duration,
             size: fs.statSync(outputPath).size,
             mimeType: 'audio/mpeg'
           };
